@@ -347,17 +347,35 @@ tr:hover td{background:var(--bg)}
   <div id="tBonus" class="tab-pane">
     <div class="card">
       <div class="card-hd"><span class="card-title">Configurar bonificação</span></div>
+      <div class="alert alert-orange" style="font-size:12px">Bônus é da <strong>equipe</strong> (motorista + ajudantes da viagem). Retirada na loja não conta. Reentrega confirmada como culpa da equipe: não paga a entrega e desconta o custo da viagem. Tudo aqui é editável.</div>
       <div class="form-row">
-        <div class="field"><label>R$ por entrega concluída</label><input type="number" id="bonusEnt" value="5" step="0.50" inputmode="decimal"></div>
-        <div class="field"><label>R$ extra por 0 ocorrências</label><input type="number" id="bonusPerf" value="50" step="5" inputmode="decimal"></div>
+        <div class="field"><label>R$ por entrega concluída (Total ou Parcial)</label><input type="number" id="bonusEnt" value="5" step="0.50" inputmode="decimal"></div>
+        <div class="field"><label>Custo da viagem por km (R$/km) — base do retrabalho</label><input type="number" id="bonusCustoKm" value="1.20" step="0.10" inputmode="decimal"></div>
       </div>
       <div class="form-row">
-        <div class="field"><label>Meta de entregas/mês</label><input type="number" id="bonusMeta" value="40" inputmode="numeric"></div>
-        <div class="field"><label>Bônus por bater meta (R$)</label><input type="number" id="bonusMetaVal" value="100" step="10" inputmode="decimal"></div>
+        <div class="field"><label>Bônus de performance (R$ por pessoa)</label><input type="number" id="bonusPerf" value="50" step="5" inputmode="decimal"></div>
+        <div class="field"><label>Taxa mínima de viagens sem ocorrência da equipe (%)</label><input type="number" id="bonusTaxaMin" value="97" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Meta de entregas da equipe/mês</label><input type="number" id="bonusMeta" value="40" inputmode="numeric"></div>
+        <div class="field"><label>Bônus por bater meta (R$ por pessoa)</label><input type="number" id="bonusMetaVal" value="100" step="10" inputmode="decimal"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Parte do motorista em cada entrega (%) — ajudantes dividem o resto</label><input type="number" id="bonusPctMoto" value="50" inputmode="numeric"></div>
       </div>
       <button class="btn btn-teal" onclick="salvarConfigBonus()">Salvar configuração</button>
       <div id="bonusConfigMsg" style="margin-top:8px"></div>
     </div>
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Ajudantes da equipe de entrega</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <input type="text" id="ajNome" placeholder="Nome do ajudante" style="flex:1;min-width:160px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+        <button class="btn btn-teal btn-sm" onclick="addAjudante()">+ Adicionar</button>
+      </div>
+      <div id="ajLista"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">O motorista marca quem está no caminhão ao sair para cada entrega. Só quem foi na viagem entra no bônus dela.</div>
+    </div>
+    <div id="bonusEquipeResumo"></div>
     <div id="bonusCards"></div>
   </div>
 
@@ -439,6 +457,14 @@ tr:hover td{background:var(--bg)}
       <div class="tbl-wrap">
         <table><thead><tr><th>Motorista</th><th>Entregas</th><th>OK</th><th>Ocorr.</th><th>KM total</th><th>Tx. sucesso</th><th>Bônus</th></tr></thead>
         <tbody id="rMotoTbl"><tr><td class="empty-row" colspan="7">Sem dados</td></tr></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Retrabalho — reentregas do mês</span></div>
+      <div id="rRetrabResumo"></div>
+      <div class="tbl-wrap" style="margin-top:10px">
+        <table><thead><tr><th>Cliente / O.S.</th><th>O que faltou</th><th>Responsável</th><th>Equipe da viagem original</th><th>Status</th><th>KM</th><th>Custo</th></tr></thead>
+        <tbody id="rRetrabTbl"><tr><td class="empty-row" colspan="7">Nenhuma reentrega</td></tr></tbody></table>
       </div>
     </div>
     <div class="card">
@@ -612,7 +638,7 @@ var MEIOSPGT = ['Cartão Bee','Pix','Dinheiro'];
 var NATUREZAS = ['Quebra','Avaria','Falta']; // Falta tem subdivisão
 var MOTIVOS_FALTA = ['Por esquecimento','Faltou entregar / Aguardando chegar de fábrica'];
 var STATUS_REPOSICAO = ['Não precisa repor','A verificar estoque','Tem estoque — separar e dar saída','Sem estoque — pedido à fábrica','Aguardando chegar da fábrica','Reposto ao cliente'];
-function temProblema(e){var t=String(e&&e.ocorrencia?e.ocorrencia.tipo:'').toLowerCase();return t.indexOf('parcial')>=0||t.indexOf('avaria')>=0||t.indexOf('quebra')>=0||t.indexOf('falta')>=0;}
+function temProblema(e){if(!e||!e.ocorrencia)return false;var t=String(e.ocorrencia.resultado||e.ocorrencia.tipo||'').toLowerCase();var n=(e.ocorrencia.naturezas||[]);return t.indexOf('parcial')>=0||t.indexOf('avaria')>=0||t.indexOf('quebra')>=0||t.indexOf('falta')>=0||n.length>0;}
 function mesIdx(m){var i=MONTHS.indexOf(String(m));return i<0?999:i;}
 // Comparacao de nomes tolerante a acento/espaco/caixa — regra sagrada: nunca igualdade exata de nome.
 // Um espaco no fim da celula do Sheets fazia a entrega sumir para o motorista.
@@ -629,7 +655,7 @@ function _mesPadrao(){
   return MONTHS.indexOf(m)>=0?m:MONTHS[MONTHS.length-1];
 }
 var me = null, curMonth = _mesPadrao();
-var S = {entregas:[],motoristas:[],abastecimentos:[],bonusConfig:{porEntrega:5,perfBonus:50,meta:40,metaBonus:100}};
+var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,pctMotorista:50}};
 var execId = null, execResultado = '';
 var _editVeicId = null;
 var sigCtx = null, sigDraw = false, sigX = 0, sigY = 0;
@@ -733,7 +759,7 @@ function doLogout(){
 // ========== STORAGE — NUVEM (porta/Sheets) ==========
 function mapEntregaParaPorta(e){
   return {mes:(e.mes||curMonth),id:e.id,os:(e.os||''),cliente:(e.cliente||''),telefone:(e.telefone||''),
-    endereco:(e.endereco||''),cidade:(e.cidade||''),bairro:(e.bairro||''),produtos:(e.produtos||''),
+    endereco:(e.endereco||''),cidade:(e.cidade||''),bairro:(e.bairro||''),produtos:extParaStr(e),
     finalizada:(e.finalizada?'sim':''),fotoEnviada:(e.fotoEnviada?'sim':''),
     obs:(e.obs||''),dataAgendada:(e.dataAgendada||''),motorista:(e.motoristaNome||''),
     status:(e.status||''),dataEntrega:(e.dataEntrega||''),
@@ -765,11 +791,11 @@ function portaParaEntrega(r){
       reposicaoStatus:r.reposicaoStatus||'',resolvida:(String(r.ocorrenciaResolvida).toLowerCase()==='sim'||r.ocorrenciaResolvida===true),resolvidoEm:r.ocorrenciaResolvidoEm||null};
   }
   return {id:r.id,mes:(r.mes||''),os:r.os||'',cliente:r.cliente||'',telefone:r.telefone||'',endereco:r.endereco||'',
-    cidade:r.cidade||'',bairro:r.bairro||'',produtos:r.produtos||'',obs:r.obs||'',
+    cidade:r.cidade||'',bairro:r.bairro||'',produtos:'',ext:strParaExt(r.produtos),obs:r.obs||'',
     finalizada:(String(r.finalizada).toLowerCase()==='sim'||r.finalizada===true),
     fotoEnviada:(String(r.fotoEnviada).toLowerCase()==='sim'||r.fotoEnviada===true),
-    dataAgendada:r.dataAgendada||'',motoristaNome:r.motorista||'',motoristaId:r.motorista||'',
-    status:r.status||'agendado',dataEntrega:r.dataEntrega||'',
+    dataAgendada:normDia(r.dataAgendada),motoristaNome:r.motorista||'',motoristaId:r.motorista||'',
+    status:r.status||'agendado',dataEntrega:normDia(r.dataEntrega),
     horaSaida:(r.horaSaida!==''&&r.horaSaida!=null?Number(r.horaSaida):null),
     horaChegada:(r.horaChegada!==''&&r.horaChegada!=null?Number(r.horaChegada):null),
     kmSaida:(r.kmSaida!==''&&r.kmSaida!=null?Number(r.kmSaida):null),
@@ -784,6 +810,7 @@ function portaParaAbast(r){
 var _snapEnt={}, _snapAb={};
 function snapshot(){
   _snapEnt={};S.entregas.forEach(function(e){_snapEnt[e.id]=JSON.stringify(mapEntregaParaPorta(e));});
+  _snapEnt[CFG_ID]=JSON.stringify(mapConfigParaPorta());
   _snapAb={};S.abastecimentos.forEach(function(a){_snapAb[a.id]=JSON.stringify(mapAbastParaPorta(a));});
 }
 function save(){
@@ -793,6 +820,8 @@ function save(){
     var row=mapEntregaParaPorta(e);var js=JSON.stringify(row);atualEnt[e.id]=js;
     if(_snapEnt[e.id]!==js)enfileirar({sheet:'Entregas',row:row});
   });
+  var cfgRow=mapConfigParaPorta();var jsC=JSON.stringify(cfgRow);atualEnt[CFG_ID]=jsC;
+  if(me&&me.role==='admin'&&_snapEnt[CFG_ID]!==jsC)enfileirar({sheet:'Entregas',row:cfgRow});
   Object.keys(_snapEnt).forEach(function(id){if(!(id in atualEnt))enfileirarDelete('Entregas',id);});
   var atualAb={};
   S.abastecimentos.forEach(function(a){
@@ -811,6 +840,7 @@ function baixarTudo(cb){
       _all.entregas=d.entregas||[];
       _all.abastecimento=d.abastecimento||[];
       _all.vendasEntrega=d.vendasEntrega||[];
+      lerConfigNuvem();
       _glob.cidades=g.cidades||[];
       _glob.veiculos=g.veiculos||[];
       var vs=g.vendedores||[];
@@ -825,6 +855,7 @@ function baixarTudo(cb){
 function loadData(){
   var ci=mesIdx(curMonth);
   S.entregas=(_all.entregas||[]).filter(function(r){
+    if(String(r.id)===CFG_ID)return false;
     if(String(r.mes)===String(curMonth))return true;
     var fin=(String(r.finalizada).toLowerCase()==='sim'||r.finalizada===true);
     return (!fin && mesIdx(r.mes)<ci);
@@ -840,6 +871,10 @@ function brl(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractio
 function fmtDate(ts){return new Date(ts).toLocaleDateString('pt-BR');}
 function fmtDT(ts){return new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function uid(){return Date.now()+Math.floor(Math.random()*9999);}
+function entById(id){return S.entregas.find(function(x){return String(x.id)===String(id);});}
+// Dia (aaaa-mm-dd) a partir de qualquer formato que a planilha devolva (ISO com hora, Date, texto)
+function normDia(v){if(!v)return '';var t=String(v);if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;var d=new Date(t);if(isNaN(d.getTime()))return t;var m=d.getMonth()+1,dd=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd;}
+function diaBR(v){var t=normDia(v);var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t);return m?(m[3]+'/'+m[2]+'/'+m[1]):(t||'—');}
 // Data de HOJE no fuso local (Brasil). toISOString() e UTC: apos as 21h gravava o dia seguinte,
 // corrompendo a dataEntrega — base do pos-venda D+3/45/90.
 function hojeISO(){var d=new Date();var m=d.getMonth()+1,dd=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd;}
@@ -885,7 +920,7 @@ function renderDash(){
   });
   var bc=S.bonusConfig;
   var rows=Object.entries(mp).map(function(kv){
-    var d=kv[1],bonus=calcBonus(d.total,d.oc,bc);
+    var d=kv[1],bonus=bonusDePessoa(kv[0]).total;
     return '<tr><td><strong>'+esc(kv[0])+'</strong></td><td>'+d.total+'</td><td>'+d.ok+'</td><td>'+d.oc+'</td><td>'+d.km+' km</td><td><strong style="color:var(--teal)">'+brl(bonus)+'</strong></td></tr>';
   }).join('');
   document.getElementById('dMotoTbl').innerHTML=rows||'<tr><td class="empty-row" colspan="6">Sem dados</td></tr>';
@@ -918,7 +953,7 @@ function renderEntregas(){
       '<td>'+esc(e.motoristaNome||'—')+'</td><td>'+sbadge(e.status)+(e.finalizada?'':' <span class="badge b-gray" style="font-size:9px">aberta</span>')+'</td>'+
       '<td style="white-space:nowrap">'+fmtDate(e.criadoEm)+'</td>'+
       '<td>'+(km?km+' km':'—')+'</td>'+
-      '<td><button class="btn btn-sm btn-ghost" onclick="openModalEnt('+e.id+')">Ver</button></td></tr>';
+      '<td><button class="btn btn-sm btn-ghost" onclick="openModalEnt(\''+e.id+'\')">Ver</button></td></tr>';
   }).join('');
   document.getElementById('entTbl').innerHTML=rows||'<tr><td class="empty-row" colspan="6">Nenhuma entrega</td></tr>';
 }
@@ -1025,7 +1060,7 @@ function salvarEntregaMoto(){
 }
 
 function openModalEnt(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(!e)return;
   var km=kmDist(e);
   var h='<div class="pv-sec"><div class="pv-sec-title">Cliente</div>'+
@@ -1034,12 +1069,25 @@ function openModalEnt(id){
     (e.telefone?'<div style="font-size:12px;color:var(--muted);margin-top:3px">'+esc(e.telefone)+'</div>':'')+
     '</div>'+
     '<div class="pv-sec"><div class="pv-sec-title">Entrega</div>'+
-    '<div style="font-size:13px;margin-top:4px"><strong>Data:</strong> '+esc(e.dataAgendada||'—')+'</div>'+
+    '<div style="font-size:13px;margin-top:4px"><strong>Data:</strong> '+diaBR(e.dataAgendada)+'</div>'+
     '<div style="font-size:13px;margin-top:4px"><strong>Motorista:</strong> '+esc(e.motoristaNome||'—')+'</div>'+
     '<div style="font-size:13px;margin-top:4px"><strong>Status:</strong> '+sbadge(e.status)+(e.finalizada?' <span class="badge b-green">Finalizada</span>':' <span class="badge b-gray">Em aberto</span>')+'</div>'+
     '<div style="font-size:13px;margin-top:4px"><strong>Foto no grupo:</strong> '+(e.fotoEnviada?'<span class="badge b-green">enviada ✔️</span>':'<span class="badge b-gray">não</span>')+'</div>'+
     (e.obs?'<div style="font-size:13px;margin-top:4px"><strong>Obs:</strong> '+esc(e.obs)+'</div>':'')+
+    (ehReentrega(e)?'<div style="font-size:13px;margin-top:4px"><strong>Viagem:</strong> 🔁 '+viagemLabel(e)+' (reentrega)</div>':'')+
+    (extDe(e).equipe.length?'<div style="font-size:13px;margin-top:4px"><strong>Equipe na viagem:</strong> '+esc(extDe(e).equipe.join(', '))+'</div>':'')+
+    (extDe(e).custoViagem?'<div style="font-size:13px;margin-top:4px"><strong>Custo da viagem:</strong> '+brl(extDe(e).custoViagem)+' ('+kmDist(e)+' km × '+brl(custoKmAtual())+')</div>':'')+
     '</div>';
+  var xp=extDe(e);
+  if(xp.pendencia.itens.length||xp.pendencia.aberta||xp.pendencia.encerradoComRessalva){
+    h+='<div class="pv-sec" style="border-color:var(--warn)"><div class="pv-sec-title" style="color:#92400e">📋 Pendência desta viagem</div>'+
+      '<div style="font-size:13px"><strong>Itens que faltaram:</strong> '+esc(xp.pendencia.itens.map(function(i){return (i.qtd?i.qtd+' × ':'')+i.item;}).join('; ')||'—')+'</div>'+
+      '<div style="font-size:13px;margin-top:3px"><strong>Situação:</strong> '+(xp.pendencia.aberta?'<span class="badge b-orange">Aberta — próxima viagem '+(xp.proximaGerada?'criada':'a criar')+'</span>':(xp.pendencia.encerradoComRessalva?'<span class="badge b-gray">Encerrada com ressalva</span>':'<span class="badge b-green">Concluída</span>'))+'</div>'+
+      (xp.pendencia.encerradoComRessalva?'<div style="font-size:12px;margin-top:3px"><strong>Como foi resolvida:</strong> '+esc(xp.pendencia.obsEncerramento)+' <span style="color:var(--muted)">('+esc(xp.pendencia.encerradoPor)+', '+(xp.pendencia.encerradoEm?fmtDate(xp.pendencia.encerradoEm):'')+')</span></div>':'')+
+      (xp.pendencia.aberta?'<div style="margin-top:8px"><textarea id="pendObsEnc" placeholder="Se o cliente resolveu sem nova viagem (ex.: aceitou o saldo em dinheiro), escreva aqui como foi" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;height:60px"></textarea>'+
+        '<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="encerrarPendencia(\''+e.id+'\')">✔️ Encerrar pendência sem nova viagem</button></div>':'')+
+      '</div>';
+  }
   if(e.kmSaida||e.kmChegada){
     h+='<div class="pv-sec"><div class="pv-sec-title">KM e tempo</div>'+
       (e.kmSaida?'<div style="font-size:13px"><strong>Saída:</strong> '+e.kmSaida+' km — '+fmtDT(e.horaSaida)+'</div>':'')+
@@ -1059,12 +1107,16 @@ function openModalEnt(id){
       '<div style="font-size:13px;margin-top:3px"><strong>Natureza:</strong> '+esc(nat||'—')+'</div>'+
       (e.ocorrencia.motivoFalta?'<div style="font-size:13px;margin-top:3px"><strong>Motivo (Falta):</strong> '+esc(e.ocorrencia.motivoFalta)+'</div>':'')+
       '<div style="font-size:13px;margin-top:3px"><strong>Descrição:</strong> '+esc(e.ocorrencia.desc||'—')+'</div>'+
+      (temProblema(e)?'<div style="font-size:13px;margin-top:3px"><strong>Responsável:</strong> '+esc(respExibir(e))+'</div>'+
+        (adm?'<div style="margin-top:6px"><select id="ocRespSel" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:white"><option value="">— confirmar responsável —</option>'+
+          Object.keys(RESP_LABELS).map(function(k){return '<option value="'+k+'"'+((extDe(e).respAdmin||extDe(e).responsavel)===k?' selected':'')+'>'+RESP_LABELS[k]+'</option>';}).join('')+
+          '</select> <button class="btn btn-sm btn-teal" onclick="confirmarResp(\''+e.id+'\')">Confirmar</button><div style="font-size:11px;color:var(--muted);margin-top:4px">Só "Equipe de entrega" confirmado desconta do bônus.</div></div>':''):'')+
       (adm?'<div style="font-size:13px;margin-top:6px"><strong>Ciclo de reposição:</strong><br><select id="selRepos" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;margin-top:6px">'+
       STATUS_REPOSICAO.map(function(st){return '<option value="'+st+'"'+(e.ocorrencia.reposicaoStatus===st?' selected':'')+'>'+st+'</option>';}).join('')+
-      '</select><button class="btn btn-sm btn-teal" style="margin-top:8px" onclick="setReposicao('+e.id+')">💾 Atualizar reposição</button></div>':
+      '</select><button class="btn btn-sm btn-teal" style="margin-top:8px" onclick="setReposicao(\''+e.id+'\')">💾 Atualizar reposição</button></div>':
       '<div style="font-size:13px;margin-top:3px"><strong>Status reposição:</strong> <span class="badge '+(e.ocorrencia.reposicaoStatus.indexOf('Reposto')>=0?'b-green':e.ocorrencia.reposicaoStatus.indexOf('pedido')>=0?'b-orange':'b-gray')+'">'+esc(e.ocorrencia.reposicaoStatus||'A verificar')+'</span></div>')+
       '<div style="font-size:13px;margin-top:3px"><strong>Status resolução:</strong> <span class="badge '+(e.ocorrencia.resolvida?'b-green':'b-red')+'">'+(e.ocorrencia.resolvida?'✓ Resolvida':'Aberta')+'</span></div>'+
-      (!e.ocorrencia.resolvida?'<button class="btn btn-teal btn-sm" style="margin-top:10px" onclick="resolverOc('+e.id+')">✅ Marcar como resolvida</button>':'')+
+      (!e.ocorrencia.resolvida?'<button class="btn btn-teal btn-sm" style="margin-top:10px" onclick="resolverOc(\''+e.id+'\')">✅ Marcar como resolvida</button>':'')+
       '</div>';
   }
   h+='<div class="sep"></div>'+
@@ -1072,15 +1124,15 @@ function openModalEnt(id){
     '<select id="editSt" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:white">'+
     Object.entries(SLABELS).map(function(kv){return '<option value="'+kv[0]+'"'+(e.status===kv[0]?' selected':'')+'>'+kv[1]+'</option>';}).join('')+
     '</select>'+
-    '<button class="btn btn-teal" onclick="editStatus('+e.id+')">Atualizar status</button>'+
-    '<button class="btn btn-ghost btn-sm" onclick="editEntForm('+e.id+')">✏️ Editar dados</button>'+
-    (me&&me.role==='admin'?'<button class="btn btn-danger btn-sm" onclick="delEnt('+e.id+')">Excluir</button>':'')+
+    '<button class="btn btn-teal" onclick="editStatus(\''+e.id+'\')">Atualizar status</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="editEntForm(\''+e.id+'\')">✏️ Editar dados</button>'+
+    (me&&me.role==='admin'?'<button class="btn btn-danger btn-sm" onclick="delEnt(\''+e.id+'\')">Excluir</button>':'')+
     '</div>';
   document.getElementById('modalEntBody').innerHTML=h;
   document.getElementById('modalEnt').classList.remove('hidden');
 }
 function editEntForm(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(!e)return;
   var opts='<option value="">Sem motorista</option>'+S.motoristas.map(function(m){return '<option value="'+m.id+'"'+(normStr(m.id)===normStr(e.motoristaId)?' selected':'')+'>'+esc(m.nome)+'</option>';}).join('');
   var h='<div class="alert alert-info" style="margin:0 0 10px">Editando a entrega. O endereço fica gravado aqui na entrega e não é apagado quando a venda é reimportada.</div>'+
@@ -1092,12 +1144,12 @@ function editEntForm(id){
     '<div class="field"><label>Data agendada</label><input type="date" id="edData" value="'+esc(e.dataAgendada)+'"></div></div>'+
     '<div class="field"><label>Motorista</label><select id="edMoto">'+opts+'</select></div>'+
     '<div class="field"><label>Observações</label><textarea id="edObs">'+esc(e.obs)+'</textarea></div>'+
-    '<div style="display:flex;gap:8px"><button class="btn btn-teal" onclick="salvarEditEnt('+e.id+')">💾 Salvar</button>'+
-    '<button class="btn btn-ghost" onclick="openModalEnt('+e.id+')">Cancelar</button></div>';
+    '<div style="display:flex;gap:8px"><button class="btn btn-teal" onclick="salvarEditEnt(\''+e.id+'\')">💾 Salvar</button>'+
+    '<button class="btn btn-ghost" onclick="openModalEnt(\''+e.id+'\')">Cancelar</button></div>';
   document.getElementById('modalEntBody').innerHTML=h;
 }
 function salvarEditEnt(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(!e)return;
   var cl=document.getElementById('edCliente').value.trim();
   var bairro=document.getElementById('edBairro').value.trim();
@@ -1114,23 +1166,23 @@ function salvarEditEnt(id){
   save();renderAll();openModalEnt(id);
 }
 function editStatus(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(e){e.status=document.getElementById('editSt').value;save();renderAll();closeModal('modalEnt');}
 }
 function delEnt(id){
   if(!confirm('Excluir esta entrega?'))return;
-  S.entregas=S.entregas.filter(function(e){return e.id!==id;});
+  S.entregas=S.entregas.filter(function(e){return String(e.id)!==String(id);});
   save();renderAll();closeModal('modalEnt');
 }
 function setReposicao(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(!e||!e.ocorrencia)return;
   var sel=document.getElementById('selRepos');
   if(sel){e.ocorrencia.reposicaoStatus=sel.value;save();renderAll();openModalEnt(id);}
 }
 
 function resolverOc(id){
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(e&&e.ocorrencia){e.ocorrencia.resolvida=true;e.ocorrencia.resolvidoEm=Date.now();save();renderAll();openModalEnt(id);}
 }
 
@@ -1240,11 +1292,12 @@ function calcBonus(total,ocorr,bc){
   return base+perf+meta;
 }
 function salvarConfigBonus(){
+  function num(id,def){var v=parseFloat(document.getElementById(id).value);return isNaN(v)?def:v;}
   S.bonusConfig={
-    porEntrega:parseFloat(document.getElementById('bonusEnt').value)||5,
-    perfBonus:parseFloat(document.getElementById('bonusPerf').value)||50,
-    meta:parseInt(document.getElementById('bonusMeta').value)||40,
-    metaBonus:parseFloat(document.getElementById('bonusMetaVal').value)||100
+    porEntrega:num('bonusEnt',5),custoKm:num('bonusCustoKm',1.2),
+    perfBonus:num('bonusPerf',50),perfTaxaMin:num('bonusTaxaMin',97),
+    meta:num('bonusMeta',40),metaBonus:num('bonusMetaVal',100),
+    pctMotorista:Math.max(0,Math.min(100,num('bonusPctMoto',50)))
   };
   save();renderBonus();
   document.getElementById('bonusConfigMsg').innerHTML='<div class="alert alert-green">✅ Configuração salva!</div>';
@@ -1253,41 +1306,31 @@ function salvarConfigBonus(){
 function renderBonus(){
   var bc=S.bonusConfig;
   document.getElementById('bonusEnt').value=bc.porEntrega;
+  document.getElementById('bonusCustoKm').value=bc.custoKm;
   document.getElementById('bonusPerf').value=bc.perfBonus;
+  document.getElementById('bonusTaxaMin').value=bc.perfTaxaMin;
   document.getElementById('bonusMeta').value=bc.meta;
   document.getElementById('bonusMetaVal').value=bc.metaBonus;
-  var mp={};
-  S.entregas.forEach(function(e){
-    var n=e.motoristaNome||'Sem motorista';
-    if(!mp[n])mp[n]={total:0,ok:0,oc:0};
-    mp[n].total++;
-    if(e.status==='entregue')mp[n].ok++;
-    if(e.status==='ocorrencia')mp[n].oc++;
-  });
-  var cards=Object.entries(mp).map(function(kv){
-    var n=kv[0],d=kv[1];
-    var bonus=calcBonus(d.total,d.oc,bc);
-    var pct=Math.min(100,Math.round(d.total/bc.meta*100));
-    var base=d.total*bc.porEntrega;
-    var perf=d.oc===0?bc.perfBonus:0;
-    var meta=d.total>=bc.meta?bc.metaBonus:0;
-    return '<div class="bonus-card">'+
-      '<div class="bonus-header">'+
-      '<div class="bonus-nome">'+esc(n)+'</div>'+
-      '<div class="bonus-val">'+brl(bonus)+'</div>'+
-      '</div>'+
-      '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%"></div></div>'+
-      '<div class="bonus-meta"><span>'+d.total+'/'+bc.meta+' entregas</span><span>'+pct+'% da meta</span></div>'+
-      '<div style="font-size:12px;margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">'+
-      '<span>Base: '+brl(base)+'</span>'+
-      '<span>Performance: '+(perf>0?'<span class="badge b-green">'+brl(perf)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
-      '<span>Meta: '+(meta>0?'<span class="badge b-gold">'+brl(meta)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
-      '</div>'+
-      (d.oc>0?'<div class="alert alert-orange" style="margin-top:10px;padding:8px 12px;font-size:12px">⚠️ '+d.oc+' ocorrência(s) — bônus de performance não liberado</div>':
-        '<div class="alert alert-green" style="margin-top:10px;padding:8px 12px;font-size:12px">✅ Sem ocorrências — bônus de performance liberado!</div>')+
-      '</div>';
+  document.getElementById('bonusPctMoto').value=bc.pctMotorista;
+  document.getElementById('ajLista').innerHTML=(S.ajudantes||[]).length?(S.ajudantes||[]).map(function(a){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(a)+' <a href="#" onclick="delAjudante(\''+esc(a).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado.</div>';
+  var r=calcBonusEquipe(S.entregas,bc);var eq=r.equipe;
+  document.getElementById('bonusEquipeResumo').innerHTML='<div class="card"><div class="card-hd"><span class="card-title">Equipe no mês</span></div>'+
+    '<div class="metrics c4">'+
+    '<div class="metric"><div class="metric-val">'+eq.concluidas+'</div><div class="metric-lbl">Entregas que pagam</div></div>'+
+    '<div class="metric"><div class="metric-val" style="color:'+(eq.perfOk?'var(--success)':'var(--danger)')+'">'+eq.taxa+'%</div><div class="metric-lbl">Sem ocorrência da equipe (mín. '+bc.perfTaxaMin+'%)</div></div>'+
+    '<div class="metric"><div class="metric-val" style="color:var(--orange)">'+eq.reentregas+'</div><div class="metric-lbl">Reentregas</div></div>'+
+    '<div class="metric"><div class="metric-val" style="color:var(--danger)">'+brl(eq.descontado)+'</div><div class="metric-lbl">Descontado (culpa equipe)</div></div></div>'+
+    (eq.ocPendConf?'<div class="alert alert-orange" style="margin-top:10px;font-size:12px">⚠️ '+eq.ocPendConf+' ocorrência(s) aguardando você confirmar o responsável (Entregas → Ver → Confirmar). Até lá não descontam.</div>':'')+
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px">Retiradas na loja no mês: '+eq.retiradas+' (não contam). Meta da equipe: '+eq.concluidas+'/'+bc.meta+(eq.metaOk?' ✅':'')+'</div></div>';
+  var cards=Object.keys(r.pessoas).sort().map(function(n){
+    var p=r.pessoas[n];
+    return '<div class="bonus-card"><div class="bonus-header"><div class="bonus-nome">'+esc(n)+' <span class="badge b-gray" style="font-size:9px">'+(p.papel==='motorista'?'motorista':'ajudante')+'</span></div><div class="bonus-val">'+brl(p.total)+'</div></div>'+
+      '<div style="font-size:12px;display:flex;flex-wrap:wrap;gap:8px"><span>Viagens: '+p.viagens+'</span><span>Base: '+brl(p.base)+'</span>'+
+      '<span>Performance: '+(p.perf>0?'<span class="badge b-green">'+brl(p.perf)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
+      '<span>Meta: '+(p.meta>0?'<span class="badge b-gold">'+brl(p.meta)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
+      (p.desconto>0?'<span class="badge b-red">− '+brl(p.desconto)+' retrabalho</span>':'')+'</div></div>';
   }).join('');
-  document.getElementById('bonusCards').innerHTML=cards||'<div class="card" style="text-align:center;color:var(--muted);padding:24px">Registre entregas para calcular bônus</div>';
+  document.getElementById('bonusCards').innerHTML=cards||'<div class="card" style="text-align:center;color:var(--muted);padding:24px">Registre entregas para calcular o bônus</div>';
 }
 
 // ========== OCORRÊNCIAS ==========
@@ -1315,7 +1358,7 @@ function renderOcorr(){
       '<td><span class="badge '+(e.ocorrencia.reposicaoStatus.indexOf('Reposto')>=0?'b-green':e.ocorrencia.reposicaoStatus.indexOf('pedido')>=0?'b-orange':'b-gray')+'">'+esc(e.ocorrencia.reposicaoStatus||'—')+'</span></td>'+
       '<td>'+esc(e.motoristaNome||'—')+'</td><td>'+fmtDate(e.criadoEm)+'</td>'+
       '<td><span class="badge '+(e.ocorrencia.resolvida?'b-green':'b-red')+'">'+(e.ocorrencia.resolvida?'✓':'Aberta')+'</span></td>'+
-      '<td><button class="btn btn-sm btn-ghost" onclick="openModalEnt('+e.id+')">Editar</button></td></tr>';
+      '<td><button class="btn btn-sm btn-ghost" onclick="openModalEnt(\''+e.id+'\')">Editar</button></td></tr>';
   }).join('');
   document.getElementById('ocTbl').innerHTML=rows||'<tr><td class="empty-row" colspan="7">Nenhuma ocorrência</td></tr>';
 }
@@ -1410,12 +1453,12 @@ function renderRelat(){
     mp[n].km+=kmDist(e);
   });
   var mRows=Object.entries(mp).map(function(kv){
-    var d=kv[1],tx=d.total>0?Math.round(d.ok/d.total*100):0,bonus=calcBonus(d.total,d.oc,bc);
+    var d=kv[1],tx=d.total>0?Math.round(d.ok/d.total*100):0,bonus=bonusDePessoa(kv[0]).total;
     return '<tr><td><strong>'+esc(kv[0])+'</strong></td><td>'+d.total+'</td><td>'+d.ok+'</td><td>'+d.oc+'</td><td>'+d.km+' km</td><td>'+tx+'%</td><td><strong style="color:var(--teal)">'+brl(bonus)+'</strong></td></tr>';
   }).join('');
   document.getElementById('rMotoTbl').innerHTML=mRows||'<tr><td class="empty-row" colspan="7">Sem dados</td></tr>';
   var ocMap={};
-  S.entregas.filter(function(e){return e.ocorrencia&&temProblema(e);}).forEach(function(e){var t=e.ocorrencia.tipo;ocMap[t]=(ocMap[t]||0)+1;});
+  S.entregas.filter(function(e){return e.ocorrencia&&temProblema(e);}).forEach(function(e){var ns=(e.ocorrencia.naturezas||[]);if(!ns.length)ns=[e.ocorrencia.resultado||'Outro'];ns.forEach(function(t){ocMap[t]=(ocMap[t]||0)+1;});});
   var ocRows=Object.entries(ocMap).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<tr><td>'+esc(kv[0])+'</td><td><strong>'+kv[1]+'</strong></td></tr>';}).join('');
   document.getElementById('rOcTbl').innerHTML=ocRows||'<tr><td class="empty-row" colspan="2">Sem ocorrências</td></tr>';
   var cRows=S.abastecimentos.slice().reverse().map(function(a){
@@ -1423,12 +1466,13 @@ function renderRelat(){
     return '<tr><td>'+fmtDate(a.data)+'</td><td>'+esc(a.motoristaNome||'—')+'</td><td>'+Number(a.litros||0).toFixed(1)+'L</td><td>'+brl(a.valor)+'</td><td>'+brl(rpl)+'</td><td>'+(a.km||'—')+'</td></tr>';
   }).join('');
   document.getElementById('rCombTbl').innerHTML=cRows||'<tr><td class="empty-row" colspan="6">Sem registros</td></tr>';
+  renderRetrabalho();
 }
 
 function exportCSV(){
   var cols=['ID','OS','Cliente','Bairro','Cidade','Endereco','Motorista','Status','Finalizada','FotoEnviada','DataAgendada','CriadoEm','KmSaida','KmChegada','KmPercorrido','Resultado','OcorrenciaResolvida'];
   var rows=S.entregas.map(function(e){
-    return [e.id,e.os,e.cliente,e.bairro,e.cidade,e.endereco,e.motoristaNome,e.status,(e.finalizada?'Sim':'Não'),(e.fotoEnviada?'Sim':'Não'),e.dataAgendada,fmtDate(e.criadoEm),e.kmSaida||'',e.kmChegada||'',kmDist(e)||'',e.ocorrencia?e.ocorrencia.tipo:'',e.ocorrencia&&temProblema(e)?(e.ocorrencia.resolvida?'Sim':'Não'):''].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(',');
+    return [e.id,e.os,e.cliente,e.bairro,e.cidade,e.endereco,e.motoristaNome,e.status,(e.finalizada?'Sim':'Não'),(e.fotoEnviada?'Sim':'Não'),e.dataAgendada,fmtDate(e.criadoEm),e.kmSaida||'',e.kmChegada||'',kmDist(e)||'',e.ocorrencia?e.ocorrencia.resultado:'',e.ocorrencia&&temProblema(e)?(e.ocorrencia.resolvida?'Sim':'Não'):'',(e.ocorrencia?(e.ocorrencia.naturezas||[]).join('/'):''),extDe(e).seq,extDe(e).equipe.join('/'),respExibir(e),extDe(e).custoViagem||''].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(',');
   });
   dl([cols.join(',')].concat(rows).join('\n'),'entregas_'+curMonth+'.csv','text/csv');
 }
@@ -1459,11 +1503,13 @@ function populateSelects(){
 function renderMotoApp(){
   var minhas=S.entregas.filter(function(e){return normStr(e.motoristaId)===normStr(me.id)&&(e.status==='agendado'||e.status==='em_rota');});
   document.getElementById('mEntLista').innerHTML=minhas.length?minhas.map(function(e){
-    return '<div class="ent-card" onclick="openExec('+e.id+')">'+
+    return '<div class="ent-card" onclick="openExec(\''+e.id+'\')">'+
       '<div class="ent-top"><span class="ent-nome">'+esc(e.cliente)+'</span>'+sbadge(e.status)+'</div>'+
       '<div class="ent-end">📍 '+esc([e.endereco,e.bairro,e.cidade].filter(Boolean).join(' — ')||'—')+'</div>'+
       (e.os?'<div class="ent-prod">🧾 O.S. '+esc(e.os)+' — siga pela nota física</div>':'<div class="ent-prod">🧾 Siga pela nota física</div>')+
+      (ehReentrega(e)?'<div style="font-size:11px;color:var(--orange);margin-top:4px">🔁 '+viagemLabel(e)+(e.dataAgendada?' — '+diaBR(e.dataAgendada):' — <strong>a agendar</strong>')+'</div>':'')+
       (e.obs?'<div style="font-size:11px;color:var(--orange);margin-top:4px">⚠️ '+esc(e.obs)+'</div>':'')+
+      (ehReentrega(e)&&e.status==='agendado'?'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="event.stopPropagation();abrirEncerrarPend(\''+extDe(e).origemId+'\')">✔️ Cliente resolveu — encerrar sem nova viagem</button>':'')+
       '</div>';
   }).join(''):'<div class="card" style="text-align:center;padding:28px;color:var(--muted)"><div style="font-size:36px;margin-bottom:8px">✅</div><div style="font-weight:600">Nenhuma entrega pendente</div></div>';
   var hist=S.entregas.filter(function(e){return normStr(e.motoristaId)===normStr(me.id)&&(e.status==='entregue'||e.status==='ocorrencia'||e.status==='devolvido');}).slice().reverse();
@@ -1482,35 +1528,33 @@ function renderMotoApp(){
 
 function renderMotoBonus(){
   var bc=S.bonusConfig;
-  var minhas=S.entregas.filter(function(e){return normStr(e.motoristaId)===normStr(me.id);});
-  var total=minhas.length,ok=minhas.filter(function(e){return e.status==='entregue';}).length;
-  var oc=minhas.filter(function(e){return e.status==='ocorrencia';}).length;
-  var bonus=calcBonus(total,oc,bc);
-  var pct=Math.min(100,Math.round(total/bc.meta*100));
+  var r=calcBonusEquipe(S.entregas,bc);var eq=r.equipe;
+  var p=bonusDePessoa(me.name);
   var html='<div class="card">'+
     '<div style="text-align:center;padding:8px 0 16px">'+
-    '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Seu bônus estimado</div>'+
-    '<div style="font-size:36px;font-weight:700;color:var(--teal);margin:8px 0">'+brl(bonus)+'</div>'+
+    '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Seu bônus estimado (equipe)</div>'+
+    '<div style="font-size:36px;font-weight:700;color:var(--teal);margin:8px 0">'+brl(p.total)+'</div>'+
     '</div>'+
-    '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%"></div></div>'+
-    '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px"><span>'+total+' entregas</span><span>Meta: '+bc.meta+'</span></div>'+
+    '<div class="prog-bar"><div class="prog-fill" style="width:'+Math.min(100,Math.round(eq.concluidas/(bc.meta||1)*100))+'%"></div></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px"><span>Equipe: '+eq.concluidas+' entregas</span><span>Meta: '+bc.meta+'</span></div>'+
     '<div class="sep"></div>'+
     '<div style="font-size:13px;display:flex;flex-direction:column;gap:8px">'+
-    '<div style="display:flex;justify-content:space-between"><span>R$ '+bc.porEntrega+'/entrega × '+total+'</span><span><strong>'+brl(total*bc.porEntrega)+'</strong></span></div>'+
-    '<div style="display:flex;justify-content:space-between"><span>Bônus performance (0 ocorr.)</span><span><strong style="color:'+(oc===0?'var(--success)':'var(--danger)')+'">'+(oc===0?'+'+brl(bc.perfBonus):'Bloqueado')+'</strong></span></div>'+
-    '<div style="display:flex;justify-content:space-between"><span>Bônus meta ('+bc.meta+' entregas)</span><span><strong style="color:'+(total>=bc.meta?'var(--success)':'var(--muted)')+'">'+(total>=bc.meta?'+'+brl(bc.metaBonus):'Pendente')+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Sua parte nas entregas ('+p.entregas+')</span><span><strong>'+brl(p.base)+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Performance da equipe ('+eq.taxa+'% sem ocorrência, mín. '+bc.perfTaxaMin+'%)</span><span><strong style="color:'+(eq.perfOk?'var(--success)':'var(--danger)')+'">'+(eq.perfOk?'+'+brl(bc.perfBonus):'Bloqueado')+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Meta da equipe ('+bc.meta+')</span><span><strong style="color:'+(eq.metaOk?'var(--success)':'var(--muted)')+'">'+(eq.metaOk?'+'+brl(bc.metaBonus):'Pendente')+'</strong></span></div>'+
+    (p.desconto>0?'<div style="display:flex;justify-content:space-between"><span>Retrabalho (reentrega por culpa da equipe)</span><span><strong style="color:var(--danger)">− '+brl(p.desconto)+'</strong></span></div>':'')+
     '</div>'+
-    (oc>0?'<div class="alert alert-orange" style="margin-top:12px">⚠️ Você tem '+oc+' ocorrência(s). Entregas sem ocorrência liberam o bônus de performance.</div>':
-    '<div class="alert alert-green" style="margin-top:12px">✅ Ótimo! Sem ocorrências até agora — bônus de performance garantido.</div>')+
+    (eq.perfOk?'<div class="alert alert-green" style="margin-top:12px">✅ Equipe dentro da taxa — bônus de performance liberado.</div>':'<div class="alert alert-orange" style="margin-top:12px">⚠️ A equipe está abaixo da taxa mínima. Entregas sem ocorrência recuperam o bônus.</div>')+
+    '<div style="font-size:11px;color:var(--muted);margin-top:10px">Retirada na loja não conta como entrega. Valores estimados — fechamento pelo admin no fim do mês.</div>'+
     '</div>';
   document.getElementById('mBonusContent').innerHTML=html;
 }
-
 function openExec(id){
   execId=id;execResultado='';
-  var e=S.entregas.find(function(x){return x.id===id;});
+  var e=entById(id);
   if(!e)return;
   _fotoSel=!!(e.fotoEnviada);
+  if(e.status==='agendado')preSelecionarEquipe(e);
   document.getElementById('finTitulo').textContent=esc(e.cliente);
   renderExecStep(e);
   document.getElementById('finScreen').classList.remove('hidden');
@@ -1524,9 +1568,17 @@ function fecharFin(){
 var _resSelec = {}; // resultado: {Total:true/false, ...}
 var _natSelec = {}; // natureza: {Quebra:true/false, ...}
 var _motFalta = ''; // motivo da falta
+var _eqSelec = {}; // ajudantes na viagem
+var _pendItens = []; // itens que ficaram faltando (Parcial)
+var _respSelec = ''; // responsável sugerido
+function _btnEq(n){var sel=!!_eqSelec[n];return '<button class="fin-btn '+(sel?'sel-ok':'')+'" onclick="toggleEq(\''+esc(n).replace(/'/g,'')+'\')"><span class="ico">'+(sel?'✅':'👤')+'</span><span class="lbl">'+esc(n)+'</span></button>';}
+function toggleEq(n){_eqSelec[n]=!_eqSelec[n];var e=entById(execId);renderExecStep(e);}
+function preSelecionarEquipe(e){_eqSelec={};var x=extDe(e);if(x.equipe.length){x.equipe.forEach(function(a){_eqSelec[a]=true;});return;}
+  var hoje=hojeISO();var ult=S.entregas.filter(function(z){return normStr(z.motoristaId)===normStr(me.id)&&z.horaSaida&&normDia(new Date(z.horaSaida).toISOString())===hoje&&extDe(z).equipe.length;}).sort(function(a,b){return b.horaSaida-a.horaSaida;})[0];
+  if(ult)extDe(ult).equipe.forEach(function(a){_eqSelec[a]=true;});}
 
 function renderExecStep(e){
-  if(!e)e=S.entregas.find(function(x){return x.id===execId;});
+  if(!e)e=entById(execId);
   if(!e)return;
   var h='';
   if(e.status==='agendado'){
@@ -1541,6 +1593,11 @@ function renderExecStep(e){
       '<div class="fin-section">'+
       '<div class="fin-label">📦 Siga pela nota física</div>'+
       '<div style="color:var(--mid);font-size:13px;padding:10px;background:white;border-radius:8px;border:1px solid var(--border)">A nota física vai junto com a entrega. Confira os itens antes de sair.</div>'+
+      '</div>'+
+      '<div class="fin-section">'+
+      '<div class="fin-label">👥 Quem está no caminhão com você?</div>'+
+      '<div class="fin-grid" id="eqGrid">'+listaEquipePossivel().map(function(n){return _btnEq(n);}).join('')+'</div>'+
+      (listaEquipePossivel().length?'':'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado (admin → Bonificação → Ajudantes).</div>')+
       '</div>'+
       '<div class="fin-section">'+
       '<div class="fin-label">🔢 KM do veículo agora (opcional)</div>'+
@@ -1565,6 +1622,8 @@ function renderExecStep(e){
       if(nat.indexOf('Falta')>=0)_natSelec.Falta=true;
       _motFalta=e.ocorrencia.motivoFalta||'';
     }
+    var xx=extDe(e);_pendItens=xx.pendencia.itens.map(function(i){return {item:i.item||'',qtd:i.qtd||''};});_respSelec=xx.responsavel||'';
+    if(_resSelec.Parcial&&!_pendItens.length)_pendItens.push({item:'',qtd:''});
     renderFinalizacao(e);
     return;
   }
@@ -1581,13 +1640,14 @@ function renderFinalizacao(e){
     '<div class="fin-label">Como foi a entrega?</div>'+
     '<div class="fin-grid">'+
     _btnFin('Total','✅','Entregue tudo','sel-ok')+
-    _btnFin('Parcial','⚠️','Entrega parcial','sel-warn')+
-    _btnFin('Avaria','🔨','Produto com dano','sel-bad')+
+    _btnFin('Parcial','⚠️','Entrega parcial (ficou faltando)','sel-warn')+
     _btnFin('Retirada','🏪','Cliente buscou na loja','sel-ok')+
     '</div>'+
+    (ehReentrega(e)?'<div style="font-size:12px;color:var(--orange);margin-top:8px">🔁 '+viagemLabel(e)+' — reentrega da pendência. Marque Total se agora ficou tudo entregue.</div>':'')+
     '</div>'+
-    // PERGUNTA 2 — Problema? (aparece se não for só Total ou só Retirada)
-    (_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta||_resSelec.Parcial||_resSelec.Avaria?
+    (_resSelec.Parcial?_secPendencia():'')+
+    // PERGUNTA 2 — Problema? (aparece se não for só Retirada)
+    (_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta||_resSelec.Parcial||_resSelec.Total?
       '<div class="fin-section">'+
       '<div class="fin-label">O que aconteceu? (pode marcar mais de um)</div>'+
       '<div class="fin-grid">'+
@@ -1602,6 +1662,7 @@ function renderFinalizacao(e){
         _btnMotivo('Aguardando fábrica','🏭','Ainda não chegou da fábrica')+
         '</div>':'')+
       '</div>':'')+ // fim naturezas
+    ((_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta||_resSelec.Parcial)?_secResp():'')+
     // DESCRIÇÃO
     '<div class="fin-section">'+
     '<div class="fin-label">Descreva o que aconteceu</div>'+
@@ -1635,6 +1696,25 @@ function renderFinalizacao(e){
   document.getElementById('finBody').innerHTML=h;
   if(!_resSelec.Retirada&&EXIGIR_ASSINATURA)setTimeout(initSig,150);
 }
+function _secPendencia(){
+  var rows=_pendItens.map(function(it,i){
+    return '<div style="display:flex;gap:6px;margin-bottom:6px"><input type="text" id="pendItem'+i+'" value="'+esc(it.item)+'" placeholder="Produto que faltou" oninput="_pendItens['+i+'].item=this.value" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">'+
+      '<input type="text" id="pendQtd'+i+'" value="'+esc(it.qtd)+'" placeholder="Qtd" oninput="_pendItens['+i+'].qtd=this.value" style="width:70px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">'+
+      '<button class="btn btn-ghost btn-sm" onclick="removerPendItem('+i+')">✕</button></div>';
+  }).join('');
+  return '<div class="fin-section" style="background:var(--warn-l);border:1px solid var(--warn);border-radius:12px;padding:12px">'+
+    '<div class="fin-label">📋 O que ficou faltando? (obrigatório)</div>'+rows+
+    '<button class="btn btn-ghost btn-sm" onclick="addPendItem()">+ adicionar item</button>'+
+    '<div style="font-size:12px;color:#92400e;margin-top:8px">Ao finalizar, o app cria automaticamente a próxima viagem desta O.S. com estes itens.</div></div>';
+}
+function _secResp(){
+  var ks=['equipe','separacao','fornecedor','cliente'];
+  return '<div class="fin-section"><div class="fin-label">De quem foi a responsabilidade? (sua sugestão — o admin confirma)</div><div class="fin-grid">'+
+    ks.map(function(k){return '<button class="fin-btn '+(_respSelec===k?'sel-warn':'')+'" onclick="selecionarResp(\''+k+'\')"><span class="ico">'+({equipe:'🚚',separacao:'🏬',fornecedor:'🏭',cliente:'🙋'})[k]+'</span><span class="lbl">'+RESP_LABELS[k]+'</span></button>';}).join('')+'</div></div>';
+}
+function addPendItem(){_pendItens.push({item:'',qtd:''});renderFinalizacao(entById(execId));}
+function removerPendItem(i){_pendItens.splice(i,1);renderFinalizacao(entById(execId));}
+function selecionarResp(k){_respSelec=(_respSelec===k)?'':k;renderFinalizacao(entById(execId));}
 function _btnFin(key,ico,lbl,selClass){
   var sel=_resSelec[key];
   return '<button class="fin-btn '+(sel?selClass:'')+'" onclick="toggleRes(\''+key+'\')">'+
@@ -1654,19 +1734,19 @@ function toggleRes(key){
   // Total e Retirada são exclusivos entre si; Parcial/Avaria podem coexistir
   if(key==='Total'){_resSelec={Total:true,Parcial:false,Avaria:false,Retirada:false};}
   else if(key==='Retirada'){_resSelec={Total:false,Parcial:false,Avaria:false,Retirada:true};}
-  else {_resSelec.Total=false;_resSelec.Retirada=false;_resSelec[key]=!_resSelec[key];}
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  else {var on=!_resSelec[key];_resSelec={Total:false,Parcial:false,Avaria:false,Retirada:false};_resSelec[key]=on;if(key==='Parcial'&&on&&!_pendItens.length)_pendItens.push({item:'',qtd:''});}
+  var e=entById(execId);
   renderFinalizacao(e);
 }
 function toggleNat(key){
   _natSelec[key]=!_natSelec[key];
   if(!_natSelec.Falta)_motFalta='';
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  var e=entById(execId);
   renderFinalizacao(e);
 }
 function selecionarMotivo(val){
   _motFalta=(_motFalta===val)?'':val;
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  var e=entById(execId);
   renderFinalizacao(e);
 }
 var _fotoSel=false;
@@ -1693,19 +1773,20 @@ function lerNaturezas(){
 function lerMotivoFalta(){return _motFalta||'';}
 
 function iniciarEnt(){
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  var e=entById(execId);
   if(!e)return;
   var kmEl=document.getElementById('kmSaidaIn');
   e.status='em_rota';
   e.kmSaida=kmEl&&kmEl.value?parseInt(kmEl.value):null;
   e.horaSaida=Date.now();
+  extDe(e).equipe=Object.keys(_eqSelec).filter(function(n){return _eqSelec[n];});
   _resSelec={Total:false,Parcial:false,Avaria:false,Retirada:false};
   _natSelec={Quebra:false,Avaria:false,Falta:false};
-  _motFalta='';_fotoSel=false;
+  _motFalta='';_fotoSel=false;_pendItens=[];_respSelec='';
   save();renderExecStep(e);renderMotoApp();renderAndamento(e);
 }
 function salvarParcialEnt(){
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  var e=entById(execId);
   if(!e)return;
   var kmEl=document.getElementById('finKmCh');
   if(kmEl&&kmEl.value)e.kmChegada=parseInt(kmEl.value);
@@ -1718,17 +1799,21 @@ function salvarParcialEnt(){
     e.ocorrencia={resultado:(res.length?res[0]:''),naturezas:nat,motivoFalta:motFalta,desc:desc,reposicaoStatus:'',resolvida:false,criadoEm:Date.now()};
     e.status='ocorrencia';
   }
+  var xs=extDe(e);xs.pendencia.itens=_pendItens.filter(function(i){return i.item;});xs.responsavel=_respSelec;
   e.fotoEnviada=_fotoSel;
   e.finalizada=false;
   save();fecharFin();renderMotoApp();
   alert('Progresso salvo. A entrega volta na lista amanhã.');
 }
 function confirmarEnt(){
-  var e=S.entregas.find(function(x){return x.id===execId;});
+  var e=entById(execId);
   if(!e)return;
   var res=lerResultados();
   if(!res.length){alert('Escolha como foi a entrega (os botões acima).');return;}
   var retirada=(_resSelec.Retirada&&!_resSelec.Total&&!_resSelec.Parcial&&!_resSelec.Avaria);
+  var itensOk=_pendItens.filter(function(i){return String(i.item||'').trim();});
+  if(_resSelec.Parcial&&!itensOk.length){alert('Entrega parcial: escreva o que ficou faltando.');return;}
+  if((_resSelec.Parcial||lerNaturezas().length)&&!_respSelec){alert('Marque de quem foi a responsabilidade (sua sugestão).');return;}
   if(!retirada&&EXIGIR_ASSINATURA&&!hasSig()){alert('Coloque a assinatura do cliente para finalizar.');return;}
   var kmEl=document.getElementById('finKmCh');
   e.kmChegada=kmEl&&kmEl.value?parseInt(kmEl.value):e.kmChegada;
@@ -1742,9 +1827,22 @@ function confirmarEnt(){
   e.dataEntrega=hojeISO();
   e.finalizada=true;
   e.status=temProblema(e)?'ocorrencia':'entregue';
+  var xf=extDe(e);
+  xf.responsavel=_respSelec;
+  xf.custoViagem=Math.round(kmDist(e)*custoKmAtual()*100)/100;
+  var msgExtra='';
+  if(_resSelec.Parcial){
+    xf.pendencia.itens=itensOk;xf.pendencia.aberta=true;xf.pendencia.encerradoComRessalva=false;
+    var prox=gerarProximaViagem(e);
+    msgExtra='\n\nFicou pendência: foi criada a '+viagemLabel(prox)+' desta O.S. (a agendar). Ela aparece na sua lista e no painel do admin.';
+  } else {
+    xf.pendencia.aberta=false;
+    var org=origemDe(e);
+    if(org){var xo=extDe(org);xo.pendencia.aberta=false;xo.proximaGerada='';}
+  }
   save();fecharFin();renderMotoApp();
   document.getElementById('mtAndContent').innerHTML='<div class="card" style="text-align:center;padding:28px;color:var(--success)"><div style="font-size:36px;margin-bottom:8px">✅</div><div style="font-weight:600">Entrega finalizada!</div></div>';
-  alert('Entrega finalizada com sucesso!');
+  alert('Entrega finalizada com sucesso!'+msgExtra);
 }
 
 function renderAndamento(e){
@@ -1753,7 +1851,7 @@ function renderAndamento(e){
     '<div style="font-size:15px;font-weight:700">'+esc(e.cliente)+'</div>'+
     '<div style="font-size:13px;color:var(--mid);margin-top:3px">📍 '+esc([e.endereco,e.bairro,e.cidade].filter(Boolean).join(' — ')||'—')+'</div>'+
     (e.os?'<div style="font-size:13px;margin-top:5px">🧾 O.S. '+esc(e.os)+'</div>':'')+
-    '<button class="btn btn-teal btn-block" style="margin-top:12px" onclick="openExec('+e.id+')">Registrar chegada / ocorrência</button>'+
+    '<button class="btn btn-teal btn-block" style="margin-top:12px" onclick="openExec(\''+e.id+'\')">Registrar chegada / ocorrência</button>'+
     '</div>';
 }
 
@@ -1802,6 +1900,227 @@ window.addEventListener('load',function(){
   var lp=document.getElementById('lPass');
   if(lp)lp.addEventListener('keydown',function(ev){if(ev.key==='Enter')doLogin();});
 });
+
+// ==================================================================
+// ========== v27 — PENDÊNCIA / EQUIPE / BÔNUS POR EQUIPE ============
+// Dados novos por entrega ficam em e.ext (gravado como JSON na coluna
+// "produtos" da aba Entregas — coluna existente e sem uso). Configuração
+// global (bônus + ajudantes) fica numa linha especial id CFG_ENTREGA.
+// ==================================================================
+var CFG_ID='CFG_ENTREGA';
+var RESP_LABELS={equipe:'Equipe de entrega',separacao:'Separação / loja',fornecedor:'Fornecedor',cliente:'Cliente'};
+function extDe(e){
+  if(!e.ext||typeof e.ext!=='object')e.ext={};
+  var x=e.ext;
+  if(!x.seq)x.seq=1;
+  if(!x.equipe)x.equipe=[];
+  if(!x.pendencia)x.pendencia={itens:[],aberta:false,encerradoComRessalva:false,encerradoPor:'',encerradoEm:null,obsEncerramento:''};
+  if(!x.responsavel)x.responsavel='';
+  if(!x.respAdmin)x.respAdmin='';
+  if(!x.origemId)x.origemId='';
+  if(!x.proximaGerada)x.proximaGerada='';
+  if(x.custoViagem===undefined)x.custoViagem=0;
+  return x;
+}
+function extParaStr(e){
+  if(!e.ext)return '';
+  var x=extDe(e);
+  var vazio=(x.seq===1&&!x.equipe.length&&!x.pendencia.itens.length&&!x.pendencia.aberta&&!x.pendencia.encerradoComRessalva&&!x.responsavel&&!x.respAdmin&&!x.origemId&&!x.proximaGerada);
+  return vazio?'':JSON.stringify(x);
+}
+function strParaExt(s){
+  if(!s)return null;
+  var t=String(s);if(t.charAt(0)!=='{')return null;
+  try{return JSON.parse(t);}catch(err){return null;}
+}
+function respConfirmado(e){var x=extDe(e);return x.respAdmin||'';}
+function respExibir(e){var x=extDe(e);return x.respAdmin?RESP_LABELS[x.respAdmin]+' (confirmado)':(x.responsavel?RESP_LABELS[x.responsavel]+' (sugerido — aguarda admin)':'—');}
+function ehReentrega(e){return extDe(e).seq>1;}
+function ehRetirada(e){return !!(e.ocorrencia&&String(e.ocorrencia.resultado||'').indexOf('Retirada')>=0);}
+function ehTotal(e){return !!(e.ocorrencia&&String(e.ocorrencia.resultado||'').indexOf('Total')>=0);}
+function ehParcial(e){return !!(e.ocorrencia&&String(e.ocorrencia.resultado||'').indexOf('Parcial')>=0);}
+function origemDe(e){var x=extDe(e);return x.origemId?entById(x.origemId):null;}
+function viagemLabel(e){var s=extDe(e).seq;return s>1?(s+'ª viagem'):'';}
+function custoKmAtual(){return Number(S.bonusConfig.custoKm||0);}
+
+// ---------- configuração global (linha CFG_ENTREGA) ----------
+function mapConfigParaPorta(){
+  return {mes:'config',id:CFG_ID,os:'',cliente:'CONFIGURAÇÃO DO APP (não apagar)',telefone:'',endereco:'',cidade:'',bairro:'',
+    produtos:JSON.stringify({bonus:S.bonusConfig,ajudantes:S.ajudantes||[]}),finalizada:'sim',fotoEnviada:'',obs:'',dataAgendada:'',motorista:'',
+    status:'config',dataEntrega:'',horaSaida:'',horaChegada:'',kmSaida:'',kmChegada:'',assinatura:'',ocorrenciaTipo:'',avariaProduto:'',avariaQtd:'',
+    ocorrenciaDesc:'',reposicaoStatus:'',ocorrenciaResolvida:'',ocorrenciaResolvidoEm:'',criadoPor:'sistema'};
+}
+function lerConfigNuvem(){
+  var r=(_all.entregas||[]).find(function(x){return String(x.id)===CFG_ID;});
+  if(!r)return;
+  var c=strParaExt(r.produtos);
+  if(!c)return;
+  if(c.bonus){var b=S.bonusConfig;Object.keys(c.bonus).forEach(function(k){b[k]=c.bonus[k];});}
+  if(c.ajudantes)S.ajudantes=c.ajudantes;
+}
+
+// ---------- pendência: gerar próxima viagem / encerrar ----------
+function gerarProximaViagem(e){
+  var x=extDe(e);
+  if(x.proximaGerada&&entById(x.proximaGerada))return entById(x.proximaGerada);
+  var itens=x.pendencia.itens.map(function(i){return (i.qtd?i.qtd+' × ':'')+i.item;}).join('; ');
+  var nova={id:uid(),mes:curMonth,os:e.os,cliente:e.cliente,telefone:e.telefone,endereco:e.endereco,bairro:e.bairro,cidade:e.cidade,
+    dataAgendada:'',produtos:'',motoristaId:e.motoristaId,motoristaNome:e.motoristaNome,
+    obs:'REENTREGA (pendência da viagem '+x.seq+'): '+itens,
+    status:'agendado',criadoEm:Date.now(),ocorrencia:null,assinatura:null,kmSaida:null,kmChegada:null,horaSaida:null,horaChegada:null,finalizada:false,fotoEnviada:false,
+    ext:{seq:x.seq+1,origemId:String(e.id),equipe:[],pendencia:{itens:[],aberta:false,encerradoComRessalva:false,encerradoPor:'',encerradoEm:null,obsEncerramento:''},responsavel:'',respAdmin:'',proximaGerada:'',custoViagem:0}};
+  S.entregas.push(nova);
+  x.proximaGerada=String(nova.id);
+  return nova;
+}
+// Encerrar a pendência SEM nova viagem (ex.: cliente aceitou receber o saldo em dinheiro).
+// idOrigem = entrega que abriu a pendência. Apaga a viagem seguinte se ainda não saiu.
+function abrirEncerrarPend(idOrigem){openModalEnt(idOrigem);}
+function encerrarPendencia(idOrigem){
+  var o=entById(idOrigem);if(!o)return;
+  var x=extDe(o);
+  var obsEl=document.getElementById('pendObsEnc');
+  var obs=obsEl?obsEl.value.trim():'';
+  if(!obs){alert('Escreva a observação: como a pendência foi resolvida com o cliente.');return;}
+  if(!confirm('Encerrar a pendência da O.S. '+(o.os||o.cliente)+' sem nova viagem? A entrega fica concluída COM RESSALVA.'))return;
+  x.pendencia.aberta=false;x.pendencia.encerradoComRessalva=true;x.pendencia.encerradoPor=(me?me.name:'');x.pendencia.encerradoEm=Date.now();x.pendencia.obsEncerramento=obs;
+  if(x.proximaGerada){
+    var p=entById(x.proximaGerada);
+    if(p&&p.status==='agendado'){S.entregas=S.entregas.filter(function(z){return String(z.id)!==String(p.id);});}
+    x.proximaGerada='';
+  }
+  if(!o.dataEntregaFinal)o.dataEntregaFinal=hojeISO();
+  save();renderAll();if(me&&me.role==='entrega')renderMotoApp();
+  var m=document.getElementById('modalEnt');if(m)m.classList.add('hidden');
+  alert('Pendência encerrada com ressalva.');
+}
+function pendenciaAberta(e){var x=extDe(e);return !!x.pendencia.aberta;}
+// Situação da O.S. (para o painel de vendas e para a lista): 'sem_entrega' | 'em_parcial' | 'concluida'
+function situacaoOS(os){
+  var vs=S.entregas.filter(function(e){return e.os&&normStr(e.os)===normStr(os);});
+  if(!vs.length)return 'sem_entrega';
+  var concl=vs.some(function(e){return e.finalizada&&(ehTotal(e)||ehRetirada(e)||extDe(e).pendencia.encerradoComRessalva);});
+  if(concl)return 'concluida';
+  var alguma=vs.some(function(e){return e.finalizada;});
+  return alguma?'em_parcial':'sem_entrega';
+}
+
+// ---------- admin: confirmar responsável ----------
+function confirmarResp(id){
+  var e=entById(id);if(!e)return;
+  var sel=document.getElementById('ocRespSel');
+  var v=sel?sel.value:'';
+  if(!v){alert('Escolha o responsável.');return;}
+  var x=extDe(e);x.respAdmin=v;
+  save();renderAll();openModalEnt(id);
+}
+
+// ---------- motor de bônus por equipe ----------
+// Regras (v27): R$ por entrega concluída (Total ou Parcial; Retirada = 0).
+// Reentrega com responsável CONFIRMADO = equipe: não paga a entrega e desconta o custo da viagem (km × R$/km)
+// do bônus de quem estava na viagem de ORIGEM. Bônus de performance por taxa (% de viagens sem ocorrência
+// de responsabilidade da equipe). Meta de volume da equipe. Divisão: motorista X%, ajudantes dividem o resto.
+function membrosDaViagem(e){
+  var x=extDe(e);var m=[];
+  if(e.motoristaNome)m.push({nome:e.motoristaNome,papel:'motorista'});
+  x.equipe.forEach(function(a){if(a&&normStr(a)!==normStr(e.motoristaNome))m.push({nome:a,papel:'ajudante'});});
+  return m;
+}
+function repartir(valor,membros,bc){
+  var out={};if(!membros.length)return out;
+  var pm=Number(bc.pctMotorista===undefined?50:bc.pctMotorista)/100;
+  var mot=membros.filter(function(m){return m.papel==='motorista';});
+  var aj=membros.filter(function(m){return m.papel==='ajudante';});
+  if(!aj.length){mot.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor;});return out;}
+  if(!mot.length){aj.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor/aj.length;});return out;}
+  mot.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor*pm;});
+  aj.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor*(1-pm)/aj.length;});
+  return out;
+}
+function ocorrenciaDaEquipe(e){return !!(e.ocorrencia&&temProblema(e)&&respConfirmado(e)==='equipe');}
+function ocorrenciaPendenteConf(e){return !!(e.ocorrencia&&temProblema(e)&&!respConfirmado(e));}
+function calcBonusEquipe(es,bc){
+  var pessoas={};
+  function P(n,papel){if(!pessoas[n])pessoas[n]={nome:n,papel:papel,entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0};if(papel==='motorista')pessoas[n].papel='motorista';return pessoas[n];}
+  var fin=es.filter(function(e){return e.finalizada&&String(e.id)!==CFG_ID;});
+  var eq={viagens:fin.length,concluidas:0,retiradas:0,ocEquipe:0,ocPendConf:0,reentregas:0,custoRetrabalho:0,descontado:0,taxa:100};
+  fin.forEach(function(e){
+    var mem=membrosDaViagem(e);
+    mem.forEach(function(m){P(m.nome,m.papel).viagens++;});
+    if(ehRetirada(e)){eq.retiradas++;return;}
+    var x=extDe(e);
+    var origem=x.origemId?entById(x.origemId):null;
+    var culpaEquipe=origem?(respConfirmado(origem)==='equipe'):false;
+    if(x.seq>1){eq.reentregas++;var custo=Number(x.custoViagem||0);eq.custoRetrabalho+=custo;
+      if(culpaEquipe&&origem){var d=repartir(custo,membrosDaViagem(origem),bc);Object.keys(d).forEach(function(n){P(n,'ajudante').desconto+=d[n];});eq.descontado+=custo;}
+    }
+    if(ocorrenciaDaEquipe(e))eq.ocEquipe++;
+    if(ocorrenciaPendenteConf(e))eq.ocPendConf++;
+    if(!(x.seq>1&&culpaEquipe)){eq.concluidas++;var b=repartir(Number(bc.porEntrega||0),mem,bc);Object.keys(b).forEach(function(n){P(n,'ajudante').base+=b[n];pessoas[n].entregas++;});}
+  });
+  var validas=eq.viagens-eq.retiradas;
+  eq.taxa=validas>0?Math.round((validas-eq.ocEquipe)/validas*100):100;
+  var perfOk=eq.taxa>=Number(bc.perfTaxaMin===undefined?97:bc.perfTaxaMin);
+  var metaOk=eq.concluidas>=Number(bc.meta||0);
+  Object.keys(pessoas).forEach(function(n){var p=pessoas[n];
+    if(p.entregas>0){p.perf=perfOk?Number(bc.perfBonus||0):0;p.meta=metaOk?Number(bc.metaBonus||0):0;}
+    p.total=Math.max(0,p.base+p.perf+p.meta-p.desconto);
+  });
+  eq.perfOk=perfOk;eq.metaOk=metaOk;
+  return {pessoas:pessoas,equipe:eq};
+}
+function bonusDePessoa(nome){var r=calcBonusEquipe(S.entregas,S.bonusConfig);var k=Object.keys(r.pessoas).find(function(n){return normStr(n)===normStr(nome);});return k?r.pessoas[k]:{nome:nome,papel:'',entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0};}
+
+// ---------- ajudantes (configuração) ----------
+function addAjudante(){
+  var el=document.getElementById('ajNome');var n=el?el.value.trim():'';
+  if(!n)return;
+  S.ajudantes=S.ajudantes||[];
+  if(S.ajudantes.some(function(a){return normStr(a)===normStr(n);})){alert('Já cadastrado.');return;}
+  S.ajudantes.push(n);el.value='';save();renderBonus();
+}
+function delAjudante(n){
+  if(!confirm('Remover '+n+' da lista de ajudantes?'))return;
+  S.ajudantes=(S.ajudantes||[]).filter(function(a){return a!==n;});save();renderBonus();
+}
+function listaEquipePossivel(){
+  var lst=(S.ajudantes||[]).slice();
+  (S.motoristas||[]).forEach(function(m){if(me&&normStr(m.nome)!==normStr(me.name)&&!lst.some(function(a){return normStr(a)===normStr(m.nome);}))lst.push(m.nome);});
+  return lst;
+}
+
+// ---------- relatório de retrabalho ----------
+function renderRetrabalho(){
+  var el=document.getElementById('rRetrabTbl');if(!el)return;
+  var re=S.entregas.filter(function(e){return ehReentrega(e)&&String(e.id)!==CFG_ID;}).slice().reverse();
+  var rows=re.map(function(e){
+    var x=extDe(e);var o=origemDe(e);var nat=o&&o.ocorrencia?(o.ocorrencia.naturezas||[]).join(', '):'';
+    var itens=o?extDe(o).pendencia.itens.map(function(i){return (i.qtd?i.qtd+' × ':'')+i.item;}).join('; '):'';
+    return '<tr><td><strong>'+esc(e.cliente)+'</strong><br><span style="font-size:10px;color:var(--muted)">'+esc(e.os||'—')+' · '+viagemLabel(e)+'</span></td>'+
+      '<td>'+esc(itens||'—')+'<br><span style="font-size:10px;color:var(--muted)">'+esc(nat)+'</span></td>'+
+      '<td>'+(o?esc(respExibir(o)):'—')+'</td>'+
+      '<td>'+esc(membrosDaViagem(o||e).map(function(m){return m.nome;}).join(', ')||'—')+'</td>'+
+      '<td>'+(e.finalizada?sbadge(e.status):'<span class="badge b-blue">'+(e.dataAgendada?'agendada':'a agendar')+'</span>')+'</td>'+
+      '<td>'+(kmDist(e)||'—')+'</td><td>'+brl(x.custoViagem||0)+'</td></tr>';
+  }).join('');
+  el.innerHTML=rows||'<tr><td class="empty-row" colspan="7">Nenhuma reentrega no mês</td></tr>';
+  var porResp={},porNat={};
+  re.forEach(function(e){var o=origemDe(e);var r=o?(respConfirmado(o)||'pendente'):'pendente';var c=Number(extDe(e).custoViagem||0);
+    porResp[r]=porResp[r]||{n:0,c:0};porResp[r].n++;porResp[r].c+=c;
+    var nats=o&&o.ocorrencia?(o.ocorrencia.naturezas||[]):[];if(!nats.length)nats=['(sem natureza)'];
+    nats.forEach(function(n){porNat[n]=porNat[n]||{n:0,c:0};porNat[n].n++;porNat[n].c+=c;});});
+  var r2=document.getElementById('rRetrabResumo');
+  if(r2){
+    var tot=re.reduce(function(s,e){return s+Number(extDe(e).custoViagem||0);},0);
+    r2.innerHTML='<div class="metrics c3">'+
+      '<div class="metric"><div class="metric-val" style="color:var(--danger)">'+re.length+'</div><div class="metric-lbl">Reentregas</div></div>'+
+      '<div class="metric"><div class="metric-val" style="color:var(--orange)">'+brl(tot)+'</div><div class="metric-lbl">Custo de retrabalho</div></div>'+
+      '<div class="metric"><div class="metric-val">'+re.filter(function(e){return !e.finalizada;}).length+'</div><div class="metric-lbl">Ainda em aberto</div></div></div>'+
+      '<div style="font-size:12px;margin-top:8px"><strong>Por responsável:</strong> '+(Object.keys(porResp).map(function(k){return (RESP_LABELS[k]||'Aguardando confirmação')+': '+porResp[k].n+' ('+brl(porResp[k].c)+')';}).join(' · ')||'—')+'</div>'+
+      '<div style="font-size:12px;margin-top:4px"><strong>Por natureza:</strong> '+(Object.keys(porNat).map(function(k){return k+': '+porNat[k].n;}).join(' · ')||'—')+'</div>';
+  }
+}
+
 </script>
 </body>
 </html>
