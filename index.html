@@ -1081,22 +1081,24 @@ function openModalEnt(id){
   var xp=extDe(e);
   if(xp.pendencia.itens.length||xp.pendencia.aberta||xp.pendencia.encerradoComRessalva){
     var admPend=(me&&me.role==='admin');
+    var foiPendAlgumDia=(xp.pendencia.aberta||xp.pendencia.encerradoComRessalva);
     var itensLi=xp.pendencia.itens.map(function(i,ix){
       return '<li style="margin-bottom:10px">'+
         '<strong>'+(i.qtd?esc(i.qtd)+' × ':'')+esc(i.item)+'</strong>'+
         '<div style="font-size:12px;color:var(--mid);margin-top:2px">'+(MOTIVO_LABELS[i.motivo]||'—')+' · sugestão do motorista: '+(RESP_LABELS[i.responsavel]||'—')+
         (i.respAdmin?' · <span style="color:var(--teal);font-weight:600">confirmado: '+RESP_LABELS[i.respAdmin]+'</span>':'')+'</div>'+
-        (admPend&&xp.pendencia.aberta?'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap"><select id="itResp'+e.id+'_'+ix+'" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:white"><option value="">— confirmar responsável —</option>'+
+        (admPend?'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap"><select id="itResp'+e.id+'_'+ix+'" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:white"><option value="">— confirmar responsável —</option>'+
           Object.keys(RESP_LABELS).map(function(k){return '<option value="'+k+'"'+(i.respAdmin===k?' selected':'')+'>'+RESP_LABELS[k]+'</option>';}).join('')+
           '</select><button class="btn btn-sm btn-teal" onclick="confirmarRespItem(\''+e.id+'\','+ix+')">Confirmar</button></div>':'')+
         '</li>';
     }).join('');
-    h+='<div class="pv-sec" style="border-color:var(--warn)"><div class="pv-sec-title" style="color:#92400e">📋 Pendência desta viagem</div>'+
+    h+='<div class="pv-sec" style="border-color:var(--warn)"><div class="pv-sec-title" style="color:#92400e">📋 '+(foiPendAlgumDia?'Pendência desta viagem':'Produtos com problema nesta entrega')+'</div>'+
       (itensLi?('<ul style="margin:6px 0 0 18px;padding:0">'+itensLi+'</ul>'):'<div style="font-size:13px">Sem itens registrados.</div>')+
-      '<div style="font-size:13px;margin-top:6px"><strong>Situação:</strong> '+(xp.pendencia.aberta?'<span class="badge b-orange">Aberta — próxima viagem '+(xp.proximaGerada?'criada':'a criar')+'</span>':(xp.pendencia.encerradoComRessalva?'<span class="badge b-gray">Encerrada com ressalva</span>':'<span class="badge b-green">Concluída</span>'))+'</div>'+
+      (foiPendAlgumDia?('<div style="font-size:13px;margin-top:6px"><strong>Situação:</strong> '+(xp.pendencia.aberta?'<span class="badge b-orange">Aberta — próxima viagem '+(xp.proximaGerada?'criada':'a criar')+'</span>':'<span class="badge b-gray">Encerrada com ressalva</span>')+'</div>'+
       (xp.pendencia.encerradoComRessalva?'<div style="font-size:12px;margin-top:3px"><strong>Como foi resolvida:</strong> '+esc(xp.pendencia.obsEncerramento)+' <span style="color:var(--muted)">('+esc(xp.pendencia.encerradoPor)+', '+(xp.pendencia.encerradoEm?fmtDate(xp.pendencia.encerradoEm):'')+')</span></div>':'')+
       (xp.pendencia.aberta?'<div style="margin-top:8px"><textarea id="pendObsEnc" placeholder="Se o cliente resolveu sem nova viagem (ex.: aceitou o saldo em dinheiro), escreva aqui como foi" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;height:60px"></textarea>'+
-        '<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="encerrarPendencia(\''+e.id+'\')">✔️ Encerrar pendência sem nova viagem</button></div>':'')+
+        '<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="encerrarPendencia(\''+e.id+'\')">✔️ Encerrar pendência sem nova viagem</button></div>':'')):
+      '<div style="font-size:12px;color:var(--muted);margin-top:6px">Produtos entregues normalmente — o problema fica registrado só para controle de qualidade e bonificação.</div>')+
       '</div>';
   }
   if(e.kmSaida||e.kmChegada){
@@ -1584,8 +1586,9 @@ var _resSelec = {}; // resultado: {Total:true/false, ...}
 var _natSelec = {}; // natureza: {Quebra:true/false, ...}
 var _motFalta = ''; // motivo da falta
 var _eqSelec = {}; // ajudantes na viagem
-var _pendItens = []; // itens que ficaram faltando (Parcial)
-var _respSelec = ''; // responsável sugerido
+var _pendItens = []; // itens que ficaram faltando (Parcial) ou com problema (Total)
+var _respSelec = ''; // responsável sugerido (legado)
+var _temDano = false; // marcou 'teve problema' fora do fluxo Parcial
 function _btnEq(n){var sel=!!_eqSelec[n];return '<button class="fin-btn '+(sel?'sel-ok':'')+'" onclick="toggleEq(\''+esc(n).replace(/'/g,'')+'\')"><span class="ico">'+(sel?'✅':'👤')+'</span><span class="lbl">'+esc(n)+'</span></button>';}
 function toggleEq(n){_eqSelec[n]=!_eqSelec[n];var e=entById(execId);renderExecStep(e);}
 function preSelecionarEquipe(e){_eqSelec={};var x=extDe(e);if(x.equipe.length){x.equipe.forEach(function(a){_eqSelec[a]=true;});return;}
@@ -1637,6 +1640,7 @@ function renderExecStep(e){
       if(nat.indexOf('Falta')>=0)_natSelec.Falta=true;
       _motFalta=e.ocorrencia.motivoFalta||'';
     }
+    _temDano=(_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta)&&!_resSelec.Parcial;
     var xx=extDe(e);
     if(xx.pendencia.itens&&xx.pendencia.itens.length){
       _pendItens=xx.pendencia.itens.map(function(i){return {item:i.item||'',qtd:i.qtd||'',motivo:i.motivo||'',responsavel:i.responsavel||'',respAdmin:i.respAdmin||'',entregue:!!i.entregue};});
@@ -1670,24 +1674,14 @@ function renderFinalizacao(e){
     '</div>'+
     (ehReentrega(e)?'<div style="font-size:12px;color:var(--orange);margin-top:8px">🔁 '+viagemLabel(e)+' — reentrega da pendência. Marque Total se agora ficou tudo entregue.</div>':'')+
     '</div>'+
-    (_resSelec.Parcial?_secPendencia(e):'')+
-    // PERGUNTA 2 — Problema? (aparece se não for só Retirada)
-    (_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta||_resSelec.Parcial||_resSelec.Total?
+    (!_resSelec.Parcial?
       '<div class="fin-section">'+
-      '<div class="fin-label">O que aconteceu? (pode marcar mais de um)</div>'+
+      '<div class="fin-label">Teve algum produto quebrado, avariado ou com problema?</div>'+
       '<div class="fin-grid">'+
-      _btnNat('Quebra','💔','Produto quebrado','sel-bad')+
-      _btnNat('Avaria','🔨','Produto com dano','sel-warn')+
-      _btnNat('Falta','📦','Faltou produto','sel-warn')+
-      '</div>'+
-      (_natSelec.Falta?
-        '<div style="margin-top:10px;padding:12px;background:var(--warn-l);border-radius:10px;border:1px solid var(--warn)">'+
-        '<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px">Por que faltou o produto?</div>'+
-        _btnMotivo('Por esquecimento','🤦','Foi esquecido aqui na loja')+
-        _btnMotivo('Aguardando fábrica','🏭','Ainda não chegou da fábrica')+
-        '</div>':'')+
-      '</div>':'')+ // fim naturezas
-    ((_natSelec.Quebra||_natSelec.Avaria||_natSelec.Falta)&&!_resSelec.Parcial?_secResp():'')+
+      '<button class="fin-btn '+(_temDano?'sel-bad':'')+'" onclick="toggleDano(true)"><span class="ico">⚠️</span><span class="lbl">Sim, teve problema</span></button>'+
+      '<button class="fin-btn '+(!_temDano?'sel-ok':'')+'" onclick="toggleDano(false)"><span class="ico">✅</span><span class="lbl">Não, tudo certo</span></button>'+
+      '</div></div>':'')+
+    ((_resSelec.Parcial||_temDano)?_secPendencia(e):'')+
     // DESCRIÇÃO
     '<div class="fin-section">'+
     '<div class="fin-label">Descreva o que aconteceu</div>'+
@@ -1723,14 +1717,15 @@ function renderFinalizacao(e){
 }
 function _secPendencia(e){
   var reent=ehReentrega(e);
-  var motivos=[['esqueceu','Esqueceu na loja'],['fabrica','Aguardando fábrica'],['quebrou','Quebrou'],['avariado','Avariado']];
+  var parcial=!!_resSelec.Parcial;
+  var motivos=parcial?[['esqueceu','Esqueceu na loja'],['fabrica','Aguardando fábrica'],['quebrou','Quebrou'],['avariado','Avariado']]:[['quebrou','Quebrou'],['avariado','Avariado']];
   var resps=['equipe','separacao','fornecedor','cliente'];
   var rows=_pendItens.map(function(it,i){
-    var checkbox=reent?('<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;font-weight:600"><input type="checkbox" '+(it.entregue?'checked':'')+' onchange="_pendItens['+i+'].entregue=this.checked;renderFinalizacao(entById(execId))"> ✅ Entregue nesta viagem</label>'):'';
+    var checkbox=(reent&&parcial)?('<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;font-weight:600"><input type="checkbox" '+(it.entregue?'checked':'')+' onchange="_pendItens['+i+'].entregue=this.checked;renderFinalizacao(entById(execId))"> ✅ Entregue nesta viagem</label>'):'';
     return '<div style="background:white;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px'+(it.entregue?';opacity:.55':'')+'">'+
       checkbox+
       '<div style="display:flex;gap:6px;margin-bottom:6px">'+
-      '<input type="text" id="pendItem'+i+'" value="'+esc(it.item)+'" placeholder="Produto que faltou" oninput="_pendItens['+i+'].item=this.value" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">'+
+      '<input type="text" id="pendItem'+i+'" value="'+esc(it.item)+'" placeholder="'+(parcial?'Produto que faltou':'Produto com problema')+'" oninput="_pendItens['+i+'].item=this.value" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">'+
       '<input type="text" id="pendQtd'+i+'" value="'+esc(it.qtd)+'" placeholder="Qtd" oninput="_pendItens['+i+'].qtd=this.value" style="width:70px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">'+
       '<button class="btn btn-ghost btn-sm" onclick="removerPendItem('+i+')">✕</button></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
@@ -1741,10 +1736,19 @@ function _secPendencia(e){
         resps.map(function(r){return '<option value="'+r+'"'+(it.responsavel===r?' selected':'')+'>'+RESP_LABELS[r]+'</option>';}).join('')+
       '</select></div></div>';
   }).join('');
+  var titulo=parcial?'📋 O que ficou faltando? (obrigatório — marque o motivo e o responsável de cada item)':'📋 Quais produtos tiveram problema? (obrigatório — um item por produto afetado)';
+  var rodape=parcial?'Ao finalizar, os itens que continuarem sem marcar "Entregue" viram a próxima viagem desta O.S.':'Esses produtos foram entregues mesmo com o problema. Cada um fica registrado separadamente para ocorrências e bonificação.';
   return '<div class="fin-section" style="background:var(--warn-l);border:1px solid var(--warn);border-radius:12px;padding:12px">'+
-    '<div class="fin-label">📋 O que ficou faltando? (obrigatório — marque o motivo e o responsável de cada item)</div>'+rows+
+    '<div class="fin-label">'+titulo+'</div>'+rows+
     '<button class="btn btn-ghost btn-sm" onclick="addPendItem()">+ adicionar item</button>'+
-    '<div style="font-size:12px;color:#92400e;margin-top:8px">Ao finalizar, os itens que continuarem sem marcar "Entregue" viram a próxima viagem desta O.S.</div></div>';
+    '<div style="font-size:12px;color:#92400e;margin-top:8px">'+rodape+'</div></div>';
+}
+function toggleDano(v){
+  _temDano=v;
+  if(v&&!_pendItens.length)_pendItens.push({item:'',qtd:'',motivo:'',responsavel:'',respAdmin:'',entregue:false});
+  if(!v)_pendItens=[];
+  var e=entById(execId);
+  renderFinalizacao(e);
 }
 function _secResp(){
   var ks=['equipe','separacao','fornecedor','cliente'];
@@ -1821,7 +1825,7 @@ function iniciarEnt(){
   extDe(e).equipe=Object.keys(_eqSelec).filter(function(n){return _eqSelec[n];});
   _resSelec={Total:false,Parcial:false,Avaria:false,Retirada:false};
   _natSelec={Quebra:false,Avaria:false,Falta:false};
-  _motFalta='';_fotoSel=false;_pendItens=[];_respSelec='';
+  _motFalta='';_fotoSel=false;_pendItens=[];_respSelec='';_temDano=false;
   save();renderExecStep(e);renderMotoApp();renderAndamento(e);
 }
 function salvarParcialEnt(){
@@ -1830,15 +1834,17 @@ function salvarParcialEnt(){
   var kmEl=document.getElementById('finKmCh');
   if(kmEl&&kmEl.value)e.kmChegada=parseInt(kmEl.value);
   var res=lerResultados();
-  var nat=lerNaturezas();
-  var motFalta=lerMotivoFalta();
+  var usaItens=_resSelec.Parcial||_temDano;
+  var pendValidos=_pendItens.filter(function(i){return String(i.item||'').trim();});
+  var nat=usaItens?uniq(pendValidos.map(function(i){return ITEM_NATUREZA[i.motivo]||'';}).filter(Boolean)):[];
+  var motFalta=usaItens?pendValidos.filter(function(i){return i.motivo==='esqueceu'||i.motivo==='fabrica';}).map(function(i){return (i.item||'')+': '+(MOTIVO_LABELS[i.motivo]||'');}).join('; '):'';
   var descEl=document.getElementById('finDesc');
   var desc=descEl?descEl.value:'';
   if(res.length||nat.length||desc){
     e.ocorrencia={resultado:(res.length?res[0]:''),naturezas:nat,motivoFalta:motFalta,desc:desc,reposicaoStatus:'',resolvida:false,criadoEm:Date.now()};
     e.status='ocorrencia';
   }
-  var xs=extDe(e);xs.pendencia.itens=_pendItens.filter(function(i){return i.item;});xs.responsavel=_respSelec;
+  var xs=extDe(e);xs.pendencia.itens=pendValidos;
   e.fotoEnviada=_fotoSel;
   e.finalizada=false;
   save();fecharFin();renderMotoApp();
@@ -1850,19 +1856,20 @@ function confirmarEnt(){
   var res=lerResultados();
   if(!res.length){alert('Escolha como foi a entrega (os botões acima).');return;}
   var retirada=(_resSelec.Retirada&&!_resSelec.Total&&!_resSelec.Parcial&&!_resSelec.Avaria);
+  var usaItens=_resSelec.Parcial||_temDano;
   var pendValidos=_pendItens.filter(function(i){return String(i.item||'').trim();});
   var itensRestantes=pendValidos.filter(function(i){return !i.entregue;});
   if(_resSelec.Parcial&&!itensRestantes.length){alert('Entrega parcial: escreva o que ficou faltando (ou desmarque "Entregue" de algum item, ou marque Total se já entregou tudo).');return;}
-  if(_resSelec.Parcial&&itensRestantes.some(function(i){return !i.motivo||!i.responsavel;})){alert('Em cada item que ainda falta, marque o que houve e de quem foi a responsabilidade.');return;}
-  if(!_resSelec.Parcial&&lerNaturezas().length&&!_respSelec){alert('Marque de quem foi a responsabilidade (sua sugestão).');return;}
+  if(_temDano&&!_resSelec.Parcial&&!itensRestantes.length){alert('Marque qual produto teve problema (ou selecione "Não, tudo certo" acima).');return;}
+  if(usaItens&&itensRestantes.some(function(i){return !i.motivo||!i.responsavel;})){alert('Em cada item marcado, escolha o que houve e de quem foi a responsabilidade.');return;}
   if(!retirada&&EXIGIR_ASSINATURA&&!hasSig()){alert('Coloque a assinatura do cliente para finalizar.');return;}
   var kmEl=document.getElementById('finKmCh');
   e.kmChegada=kmEl&&kmEl.value?parseInt(kmEl.value):e.kmChegada;
   e.horaChegada=Date.now();
   var descEl=document.getElementById('finDesc');
   var natAuto=itensRestantes.map(function(i){return ITEM_NATUREZA[i.motivo]||'';}).filter(Boolean);
-  var nat=_resSelec.Parcial?uniq(natAuto):lerNaturezas();
-  var motFalta=_resSelec.Parcial?itensRestantes.filter(function(i){return i.motivo==='esqueceu'||i.motivo==='fabrica';}).map(function(i){return (i.item||'')+': '+(MOTIVO_LABELS[i.motivo]||'');}).join('; '):lerMotivoFalta();
+  var nat=usaItens?uniq(natAuto):[];
+  var motFalta=usaItens?itensRestantes.filter(function(i){return i.motivo==='esqueceu'||i.motivo==='fabrica';}).map(function(i){return (i.item||'')+': '+(MOTIVO_LABELS[i.motivo]||'');}).join('; '):'';
   e.ocorrencia={resultado:res.join(','),naturezas:nat,motivoFalta:motFalta,desc:descEl?descEl.value:'',reposicaoStatus:nat.length?'A verificar estoque':'',resolvida:false,criadoEm:Date.now()};
   e.fotoEnviada=_fotoSel;
   if(!retirada&&EXIGIR_ASSINATURA){var c=document.getElementById('sigCanvas');e.assinatura=c?c.toDataURL():null;}
@@ -1870,7 +1877,6 @@ function confirmarEnt(){
   e.finalizada=true;
   e.status=temProblema(e)?'ocorrencia':'entregue';
   var xf=extDe(e);
-  xf.responsavel=_respSelec;
   xf.custoViagem=Math.round(kmDist(e)*custoKmAtual()*100)/100;
   var msgExtra='';
   if(_resSelec.Parcial){
@@ -1878,7 +1884,7 @@ function confirmarEnt(){
     var prox=gerarProximaViagem(e);
     msgExtra='\n\nFicou pendência: foi criada a '+viagemLabel(prox)+' desta O.S. (a agendar). Ela aparece na sua lista e no painel do admin.';
   } else {
-    xf.pendencia.itens=[];xf.pendencia.aberta=false;
+    xf.pendencia.itens=usaItens?itensRestantes:[];xf.pendencia.aberta=false;
     var org=origemDe(e);
     if(org){var xo=extDe(org);xo.pendencia.aberta=false;xo.proximaGerada='';}
   }
