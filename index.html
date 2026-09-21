@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#0D9A8F">
+<meta name="theme-color" content="#07514E">
 <title>Revestir — Entregas</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{--teal:#0D9A8F;--teal-d:#0a7a6f;--teal-l:#ccfbf1;--orange:#F07C1A;--orange-l:#ffedd5;--dark:#111827;--mid:#374151;--muted:#9CA3AF;--border:#E5E7EB;--bg:#F9FAFB;--white:#fff;--success:#10B981;--success-l:#d1fae5;--danger:#EF4444;--danger-l:#fee2e2;--warn:#F59E0B;--warn-l:#fef3c7}
+:root{--teal:#00635F;--teal-d:#07514E;--teal-l:#E6F2F1;--orange:#A04F00;--orange-l:#FDF0E4;--dark:#141413;--mid:#3A3833;--muted:#5C5A55;--border:#E2DED5;--bg:#F3F1EC;--white:#fff;--success:#17795E;--success-l:#E6F5F0;--danger:#B4271F;--danger-l:#FBEAE8;--warn:#A04F00;--warn-l:#FDF0E4;--teal-fill:#08ACB1;--orange-fill:#F07D00}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a7a6f 0%,var(--teal) 55%,var(--orange) 100%);padding:20px}
 .login-box{background:white;border-radius:20px;padding:40px 32px;width:100%;max-width:380px;box-shadow:0 25px 80px rgba(0,0,0,0.25)}
@@ -140,6 +140,51 @@ tr:hover td{background:var(--bg)}
 .abast-item:last-child{border:none}
 .hidden{display:none!important}
 @media(max-width:480px){.metrics.c4{grid-template-columns:repeat(2,1fr)}.metrics.c3{grid-template-columns:repeat(3,1fr)}.form-row{grid-template-columns:1fr}}
+
+/* ===================== v32 — TEMA REVESTIR (app de entrega) =====================
+   Mesmas cores e mesma tipografia do dashboard. O teal da marca so preenche:
+   como TEXTO ele reprova em contraste, entao texto usa --rv-teal-tx. */
+:root{
+  --rv-teal:#08ACB1; --rv-teal-tx:#00635F; --rv-teal-dk:#07514E; --rv-teal-md:#0C625E;
+  --rv-laranja:#F07D00; --rv-laranja-tx:#A04F00;
+  --rv-ok:#17795E; --rv-ruim:#B4271F;
+  --rv-tinta:#141413; --rv-sec:#5C5A55; --rv-linha:#E2DED5; --rv-linha2:#F0EDE6; --rv-fundo:#F3F1EC;
+}
+body{font-family:'IBM Plex Sans','DM Sans',system-ui,sans-serif;background:var(--rv-fundo);color:var(--rv-tinta)}
+.login-wrap{background:var(--rv-teal-dk)}
+.login-box{border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+.btn-login{background:var(--rv-teal-tx);border-radius:10px;min-height:52px;font-size:16px}
+.btn-login:active{background:var(--rv-teal-dk)}
+
+.header{background:#fff;border-bottom:1px solid var(--rv-linha)}
+.card{background:#fff;border:1px solid var(--rv-linha);border-radius:12px}
+.card-hd{border-bottom:1px solid var(--rv-linha2)}
+.card-title{font-family:'Archivo','DM Sans',sans-serif;font-size:15px;font-weight:700;color:var(--rv-tinta)}
+
+.metric{background:#fff;border:1px solid var(--rv-linha);border-radius:12px}
+.metric-val{font-size:22px;font-weight:700;color:var(--rv-tinta)}
+.metric-lbl{font-size:10px;color:var(--rv-sec);font-weight:600;letter-spacing:.4px}
+
+/* abas: alvo maior para o dedo */
+.tab-btn{min-height:48px;padding:13px 16px;font-size:13px;color:var(--rv-sec)}
+.tab-btn.active{color:var(--rv-teal-tx);border-bottom-color:var(--rv-teal-tx)}
+
+table thead th{font-size:11px;font-weight:600;color:var(--rv-sec);letter-spacing:.4px;
+  text-transform:uppercase;border-bottom:1px solid var(--rv-linha);background:none}
+table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
+
+.badge{border-radius:999px;font-size:11px;font-weight:600;padding:3px 9px}
+.b-blue{background:#E6F2F1;color:var(--rv-teal-tx)}
+.b-green{background:#E6F5F0;color:var(--rv-ok)}
+.b-orange{background:#FDF0E4;color:var(--rv-laranja-tx)}
+.b-red{background:#FBEAE8;color:var(--rv-ruim)}
+.b-gray{background:#EFECE5;color:var(--rv-sec)}
+
+.alert{border-radius:10px;border:1px solid var(--rv-linha);background:#fff;color:var(--rv-tinta);font-size:13px}
+.alert-info{background:#F2FAF9;border-color:#CCEFED}
+
+.field input,.field select,.field textarea{border:1px solid #DDD8CE;border-radius:9px;min-height:48px;font-size:16px}
+.field label{font-size:12px;color:var(--rv-sec);font-weight:600}
 </style>
 </head>
 <body>
