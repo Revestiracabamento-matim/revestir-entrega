@@ -213,6 +213,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="badge b-blue">ADMIN</span>
+      <button class="btn btn-sm btn-ghost" id="btnModoMoto" style="display:none" onclick="modoMotorista()">Modo motorista</button>
       <button class="btn btn-sm btn-ghost" onclick="doLogout()">Sair</button>
     </div>
   </div>
@@ -420,6 +421,15 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <div id="ajLista"></div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">O motorista marca quem está no caminhão ao sair para cada entrega. Só quem foi na viagem entra no bônus dela.</div>
     </div>
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Gestores que também dirigem</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <input type="text" id="gestNome" placeholder="Nome exato do gestor" style="flex:1;min-width:160px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+        <button class="btn btn-teal btn-sm" onclick="addGestorDir()">+ Adicionar</button>
+      </div>
+      <div id="gestLista"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Quem está aqui tem papel Admin (vê tudo) e ainda pode ser escalado como motorista, com um botão "Modo motorista" no topo. O nome precisa ser igual ao do cadastro de usuários.</div>
+    </div>
     <div id="bonusEquipeResumo"></div>
     <div id="bonusCards"></div>
   </div>
@@ -534,6 +544,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
   <div class="header">
     <img id="mlLogo" class="header-logo" src="" alt="">
     <div style="font-size:12px;font-weight:600;color:var(--mid)" id="motoNomeHdr"></div>
+    <button class="btn btn-sm btn-ghost" id="btnModoGestao" style="display:none" onclick="modoGestao()">Modo gestão</button>
     <button class="btn btn-sm btn-ghost" onclick="doLogout()">Sair</button>
   </div>
   <div class="tabs">
@@ -700,7 +711,7 @@ function _mesPadrao(){
   return MONTHS.indexOf(m)>=0?m:MONTHS[MONTHS.length-1];
 }
 var me = null, curMonth = _mesPadrao();
-var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,pctMotorista:50}};
+var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],gestoresDir:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,pctMotorista:50}};
 var execId = null, execResultado = '';
 var _editVeicId = null;
 var sigCtx = null, sigDraw = false, sigX = 0, sigY = 0;
@@ -773,6 +784,12 @@ function iniciarSessao(){
       aplicarPermsEntrega();
       populateSelects();
       renderAll();
+      if(souGestorQueDirige()){
+        var bm=document.getElementById('btnModoMoto'); if(bm)bm.style.display='';
+        var bg=document.getElementById('btnModoGestao'); if(bg)bg.style.display='';
+        var ml2=document.getElementById('mlLogo'); if(ml2)ml2.src=LOGO;
+        var hn2=document.getElementById('motoNomeHdr'); if(hn2)hn2.textContent=(me?me.name:'');
+      }
     } else {
       document.getElementById('appMoto').classList.remove('hidden');
       var ml=document.getElementById('mlLogo');if(ml)ml.src=LOGO;
@@ -780,7 +797,10 @@ function iniciarSessao(){
       populateSelects();
       renderMotoApp();
     }
-    if(!window._refE){window._refE=setInterval(function(){baixarTudo(function(){if(me&&me.role==='admin')renderAll();else renderMotoApp();});},20000);}
+    if(!window._refE){window._refE=setInterval(function(){baixarTudo(function(){
+      var motoAberto=!document.getElementById('appMoto').classList.contains('hidden');
+      if(motoAberto)renderMotoApp(); else if(me&&me.role==='admin')renderAll(); else renderMotoApp();
+    });},20000);}
   });
 }
 // Esconde para a equipe de entrega (nao-admin) os controles que sao so do admin
@@ -891,6 +911,13 @@ function baixarTudo(cb){
       var vs=g.vendedores||[];
       _glob.motoristas=vs.filter(function(u){var p=String(u.papel).toLowerCase();return p==='motorista'||p==='entrega';})
                          .map(function(u){return {id:u.nome,nome:u.nome,user:u.usuario};});
+      // v33: gestor/admin que tambem dirige entra na lista de motoristas (lista em Bonificacao)
+      vs.forEach(function(u){
+        if(String(u.papel).toLowerCase()!=='admin')return;
+        if(!ehGestorQueDirige(u.nome))return;
+        var ja=_glob.motoristas.some(function(m){return normStr(m.nome)===normStr(u.nome);});
+        if(!ja)_glob.motoristas.push({id:u.nome,nome:u.nome,user:u.usuario});
+      });
       if(me&&me.role==='entrega'&&!_glob.motoristas.length){_glob.motoristas=[{id:me.name,nome:me.name,user:me.user}];}
       loadData();
       if(cb)cb();
@@ -1371,6 +1398,8 @@ function renderBonus(){
   document.getElementById('bonusMeta').value=bc.meta;
   document.getElementById('bonusMetaVal').value=bc.metaBonus;
   document.getElementById('bonusPctMoto').value=bc.pctMotorista;
+  var _gl=document.getElementById('gestLista');
+  if(_gl)_gl.innerHTML=(S.gestoresDir||[]).length?(S.gestoresDir||[]).map(function(g){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(g)+' <a href="#" onclick="delGestorDir(\''+esc(g).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum gestor na lista.</div>';
   document.getElementById('ajLista').innerHTML=(S.ajudantes||[]).length?(S.ajudantes||[]).map(function(a){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(a)+' <a href="#" onclick="delAjudante(\''+esc(a).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado.</div>';
   var r=calcBonusEquipe(S.entregas,bc);var eq=r.equipe;
   document.getElementById('bonusEquipeResumo').innerHTML='<div class="card"><div class="card-hd"><span class="card-title">Equipe no mês</span></div>'+
@@ -2056,7 +2085,7 @@ function custoKmAtual(){return Number(S.bonusConfig.custoKm||0);}
 // ---------- configuração global (linha CFG_ENTREGA) ----------
 function mapConfigParaPorta(){
   return {mes:'config',id:CFG_ID,os:'',cliente:'CONFIGURAÇÃO DO APP (não apagar)',telefone:'',endereco:'',cidade:'',bairro:'',
-    produtos:JSON.stringify({bonus:S.bonusConfig,ajudantes:S.ajudantes||[]}),finalizada:'sim',fotoEnviada:'',obs:'',dataAgendada:'',motorista:'',
+    produtos:JSON.stringify({bonus:S.bonusConfig,ajudantes:S.ajudantes||[],gestores:S.gestoresDir||[]}),finalizada:'sim',fotoEnviada:'',obs:'',dataAgendada:'',motorista:'',
     status:'config',dataEntrega:'',horaSaida:'',horaChegada:'',kmSaida:'',kmChegada:'',assinatura:'',ocorrenciaTipo:'',avariaProduto:'',avariaQtd:'',
     ocorrenciaDesc:'',reposicaoStatus:'',ocorrenciaResolvida:'',ocorrenciaResolvidoEm:'',criadoPor:'sistema'};
 }
@@ -2067,6 +2096,7 @@ function lerConfigNuvem(){
   if(!c)return;
   if(c.bonus){var b=S.bonusConfig;Object.keys(c.bonus).forEach(function(k){b[k]=c.bonus[k];});}
   if(c.ajudantes)S.ajudantes=c.ajudantes;
+  if(c.gestores)S.gestoresDir=c.gestores;
 }
 
 // ---------- pendência: gerar próxima viagem / encerrar ----------
@@ -2203,6 +2233,38 @@ function calcBonusEquipe(es,bc){
   return {pessoas:pessoas,equipe:eq};
 }
 function bonusDePessoa(nome){var r=calcBonusEquipe(S.entregas,S.bonusConfig);var k=Object.keys(r.pessoas).find(function(n){return normStr(n)===normStr(nome);});return k?r.pessoas[k]:{nome:nome,papel:'',entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0};}
+
+// ---------- v33: gestores que tambem dirigem ----------
+function ehGestorQueDirige(nome){
+  if(!nome)return false;
+  return (S.gestoresDir||[]).some(function(g){return normStr(g)===normStr(nome);});
+}
+function souGestorQueDirige(){
+  return !!(me && me.role==='admin' && ehGestorQueDirige(me.name));
+}
+function modoMotorista(){
+  document.getElementById('appAdmin').classList.add('hidden');
+  document.getElementById('appMoto').classList.remove('hidden');
+  renderMotoApp();
+  window.scrollTo(0,0);
+}
+function modoGestao(){
+  document.getElementById('appMoto').classList.add('hidden');
+  document.getElementById('appAdmin').classList.remove('hidden');
+  renderAll();
+  window.scrollTo(0,0);
+}
+function addGestorDir(){
+  var el=document.getElementById('gestNome');var n=el?el.value.trim():'';
+  if(!n)return;
+  S.gestoresDir=S.gestoresDir||[];
+  if(S.gestoresDir.some(function(g){return normStr(g)===normStr(n);})){alert('Já está na lista.');return;}
+  S.gestoresDir.push(n);el.value='';save();renderBonus();
+}
+function delGestorDir(n){
+  if(!confirm('Remover '+n+' da lista de gestores que dirigem?'))return;
+  S.gestoresDir=(S.gestoresDir||[]).filter(function(g){return g!==n;});save();renderBonus();
+}
 
 // ---------- ajudantes (configuração) ----------
 function addAjudante(){
