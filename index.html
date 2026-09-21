@@ -393,7 +393,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
   <div id="tBonus" class="tab-pane">
     <div class="card">
       <div class="card-hd"><span class="card-title">Configurar bonificação</span></div>
-      <div class="alert alert-orange" style="font-size:12px">Bônus é da <strong>equipe</strong> (motorista + ajudantes da viagem). Retirada na loja não conta. Reentrega confirmada como culpa da equipe: não paga a entrega e desconta o custo da viagem. Tudo aqui é editável.</div>
+      <div class="alert alert-orange" style="font-size:12px">Bônus é da <strong>equipe</strong> (motorista + ajudantes da viagem), dividido em partes iguais. Retirada na loja não conta. Reentrega confirmada como culpa da equipe: não paga a entrega e desconta o custo da viagem. Tudo aqui é editável.</div>
       <div class="form-row">
         <div class="field"><label>R$ por entrega concluída (Total ou Parcial)</label><input type="number" id="bonusEnt" value="5" step="0.50" inputmode="decimal"></div>
         <div class="field"><label>Custo da viagem por km (R$/km) — base do retrabalho</label><input type="number" id="bonusCustoKm" value="1.20" step="0.10" inputmode="decimal"></div>
@@ -407,8 +407,9 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
         <div class="field"><label>Bônus por bater meta (R$ por pessoa)</label><input type="number" id="bonusMetaVal" value="100" step="10" inputmode="decimal"></div>
       </div>
       <div class="form-row">
-        <div class="field"><label>Parte do motorista em cada entrega (%) — ajudantes dividem o resto</label><input type="number" id="bonusPctMoto" value="50" inputmode="numeric"></div>
+        <div class="field"><label>Participação mínima para receber os bônus coletivos (% das viagens do mês)</label><input type="number" id="bonusMinPart" value="50" min="0" max="100" inputmode="numeric"></div>
       </div>
+      <div class="alert alert-info" style="font-size:12px">O valor por entrega é dividido <strong>igualmente</strong> entre todos que estavam na viagem. Os bônus de performance e de meta são valores fixos por pessoa, liberados só para quem participou de pelo menos a porcentagem acima das viagens válidas do mês.</div>
       <button class="btn btn-teal" onclick="salvarConfigBonus()">Salvar configuração</button>
       <div id="bonusConfigMsg" style="margin-top:8px"></div>
     </div>
@@ -711,7 +712,7 @@ function _mesPadrao(){
   return MONTHS.indexOf(m)>=0?m:MONTHS[MONTHS.length-1];
 }
 var me = null, curMonth = _mesPadrao();
-var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],gestoresDir:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,pctMotorista:50}};
+var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],gestoresDir:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,minPartic:50}};
 var execId = null, execResultado = '';
 var _editVeicId = null;
 var sigCtx = null, sigDraw = false, sigX = 0, sigY = 0;
@@ -1383,7 +1384,7 @@ function salvarConfigBonus(){
     porEntrega:num('bonusEnt',5),custoKm:num('bonusCustoKm',1.2),
     perfBonus:num('bonusPerf',50),perfTaxaMin:num('bonusTaxaMin',97),
     meta:num('bonusMeta',40),metaBonus:num('bonusMetaVal',100),
-    pctMotorista:Math.max(0,Math.min(100,num('bonusPctMoto',50)))
+    minPartic:Math.max(0,Math.min(100,num('bonusMinPart',50)))
   };
   save();renderBonus();
   document.getElementById('bonusConfigMsg').innerHTML='<div class="alert alert-green">✅ Configuração salva!</div>';
@@ -1397,7 +1398,7 @@ function renderBonus(){
   document.getElementById('bonusTaxaMin').value=bc.perfTaxaMin;
   document.getElementById('bonusMeta').value=bc.meta;
   document.getElementById('bonusMetaVal').value=bc.metaBonus;
-  document.getElementById('bonusPctMoto').value=bc.pctMotorista;
+  document.getElementById('bonusMinPart').value=(bc.minPartic===undefined?50:bc.minPartic);
   var _gl=document.getElementById('gestLista');
   if(_gl)_gl.innerHTML=(S.gestoresDir||[]).length?(S.gestoresDir||[]).map(function(g){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(g)+' <a href="#" onclick="delGestorDir(\''+esc(g).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum gestor na lista.</div>';
   document.getElementById('ajLista').innerHTML=(S.ajudantes||[]).length?(S.ajudantes||[]).map(function(a){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(a)+' <a href="#" onclick="delAjudante(\''+esc(a).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado.</div>';
@@ -1413,10 +1414,11 @@ function renderBonus(){
   var cards=Object.keys(r.pessoas).sort().map(function(n){
     var p=r.pessoas[n];
     return '<div class="bonus-card"><div class="bonus-header"><div class="bonus-nome">'+esc(n)+' <span class="badge b-gray" style="font-size:9px">'+(p.papel==='motorista'?'motorista':'ajudante')+'</span></div><div class="bonus-val">'+brl(p.total)+'</div></div>'+
-      '<div style="font-size:12px;display:flex;flex-wrap:wrap;gap:8px"><span>Viagens: '+p.viagens+'</span><span>Base: '+brl(p.base)+'</span>'+
+      '<div style="font-size:12px;display:flex;flex-wrap:wrap;gap:8px"><span>Viagens: '+p.viagensValidas+' de '+eq.validas+' ('+p.pctPartic+'%)</span><span>Base: '+brl(p.base)+'</span>'+
       '<span>Performance: '+(p.perf>0?'<span class="badge b-green">'+brl(p.perf)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
       '<span>Meta: '+(p.meta>0?'<span class="badge b-gold">'+brl(p.meta)+'</span>':'<span class="badge b-gray">R$ 0</span>')+'</span>'+
-      (p.desconto>0?'<span class="badge b-red">− '+brl(p.desconto)+' retrabalho</span>':'')+'</div></div>';
+      (p.desconto>0?'<span class="badge b-red">− '+brl(p.desconto)+' retrabalho</span>':'')+'</div>'+
+      (!p.qualificado?'<div style="font-size:11px;color:var(--danger);margin-top:6px">Fora dos bônus coletivos: participou de '+p.pctPartic+'% das viagens (mínimo '+eq.minPartic+'%).</div>':'')+'</div>';
   }).join('');
   document.getElementById('bonusCards').innerHTML=cards||'<div class="card" style="text-align:center;color:var(--muted);padding:24px">Registre entregas para calcular o bônus</div>';
 }
@@ -1631,8 +1633,9 @@ function renderMotoBonus(){
     '<div class="sep"></div>'+
     '<div style="font-size:13px;display:flex;flex-direction:column;gap:8px">'+
     '<div style="display:flex;justify-content:space-between"><span>Sua parte nas entregas ('+p.entregas+')</span><span><strong>'+brl(p.base)+'</strong></span></div>'+
-    '<div style="display:flex;justify-content:space-between"><span>Performance da equipe ('+eq.taxa+'% sem ocorrência, mín. '+bc.perfTaxaMin+'%)</span><span><strong style="color:'+(eq.perfOk?'var(--success)':'var(--danger)')+'">'+(eq.perfOk?'+'+brl(bc.perfBonus):'Bloqueado')+'</strong></span></div>'+
-    '<div style="display:flex;justify-content:space-between"><span>Meta da equipe ('+bc.meta+')</span><span><strong style="color:'+(eq.metaOk?'var(--success)':'var(--muted)')+'">'+(eq.metaOk?'+'+brl(bc.metaBonus):'Pendente')+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Sua participação ('+p.viagensValidas+' de '+eq.validas+' viagens, mín. '+eq.minPartic+'%)</span><span><strong style="color:'+(p.qualificado?'var(--success)':'var(--danger)')+'">'+p.pctPartic+'%</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Performance da equipe ('+eq.taxa+'% sem ocorrência, mín. '+bc.perfTaxaMin+'%)</span><span><strong style="color:'+(eq.perfOk&&p.qualificado?'var(--success)':'var(--danger)')+'">'+(eq.perfOk?(p.qualificado?'+'+brl(bc.perfBonus):'Fora'):'Bloqueado')+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Meta da equipe ('+bc.meta+')</span><span><strong style="color:'+(eq.metaOk&&p.qualificado?'var(--success)':'var(--muted)')+'">'+(eq.metaOk?(p.qualificado?'+'+brl(bc.metaBonus):'Fora'):'Pendente')+'</strong></span></div>'+
     (p.desconto>0?'<div style="display:flex;justify-content:space-between"><span>Retrabalho (reentrega por culpa da equipe)</span><span><strong style="color:var(--danger)">− '+brl(p.desconto)+'</strong></span></div>':'')+
     '</div>'+
     (eq.perfOk?'<div class="alert alert-green" style="margin-top:12px">✅ Equipe dentro da taxa — bônus de performance liberado.</div>':'<div class="alert alert-orange" style="margin-top:12px">⚠️ A equipe está abaixo da taxa mínima. Entregas sem ocorrência recuperam o bônus.</div>')+
@@ -2176,15 +2179,12 @@ function membrosDaViagem(e){
   x.equipe.forEach(function(a){if(a&&normStr(a)!==normStr(e.motoristaNome))m.push({nome:a,papel:'ajudante'});});
   return m;
 }
+// v34: rateio IGUAL entre todos que estavam na viagem. O motorista nao tem
+// parte maior — a responsabilidade extra dele ja esta no salario base.
 function repartir(valor,membros,bc){
   var out={};if(!membros.length)return out;
-  var pm=Number(bc.pctMotorista===undefined?50:bc.pctMotorista)/100;
-  var mot=membros.filter(function(m){return m.papel==='motorista';});
-  var aj=membros.filter(function(m){return m.papel==='ajudante';});
-  if(!aj.length){mot.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor;});return out;}
-  if(!mot.length){aj.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor/aj.length;});return out;}
-  mot.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor*pm;});
-  aj.forEach(function(m){out[m.nome]=(out[m.nome]||0)+valor*(1-pm)/aj.length;});
+  var parte=valor/membros.length;
+  membros.forEach(function(m){out[m.nome]=(out[m.nome]||0)+parte;});
   return out;
 }
 function respAdminEfetivo(e){
@@ -2205,13 +2205,14 @@ function ocorrenciaPendenteConf(e){
 }
 function calcBonusEquipe(es,bc){
   var pessoas={};
-  function P(n,papel){if(!pessoas[n])pessoas[n]={nome:n,papel:papel,entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0};if(papel==='motorista')pessoas[n].papel='motorista';return pessoas[n];}
+  function P(n,papel){if(!pessoas[n])pessoas[n]={nome:n,papel:papel,entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0,viagensValidas:0,pctPartic:0,qualificado:false};if(papel==='motorista')pessoas[n].papel='motorista';return pessoas[n];}
   var fin=es.filter(function(e){return e.finalizada&&String(e.id)!==CFG_ID;});
   var eq={viagens:fin.length,concluidas:0,retiradas:0,ocEquipe:0,ocPendConf:0,reentregas:0,custoRetrabalho:0,descontado:0,taxa:100};
   fin.forEach(function(e){
     var mem=membrosDaViagem(e);
     mem.forEach(function(m){P(m.nome,m.papel).viagens++;});
     if(ehRetirada(e)){eq.retiradas++;return;}
+    mem.forEach(function(m){P(m.nome,m.papel).viagensValidas++;});
     var x=extDe(e);
     var origem=x.origemId?entById(x.origemId):null;
     if(x.seq>1){eq.reentregas++;var custo=Number(x.custoViagem||0);eq.custoRetrabalho+=custo;
@@ -2225,11 +2226,14 @@ function calcBonusEquipe(es,bc){
   eq.taxa=validas>0?Math.round((validas-eq.ocEquipe)/validas*100):100;
   var perfOk=eq.taxa>=Number(bc.perfTaxaMin===undefined?97:bc.perfTaxaMin);
   var metaOk=eq.concluidas>=Number(bc.meta||0);
+  var minPct=Number(bc.minPartic===undefined?50:bc.minPartic);
   Object.keys(pessoas).forEach(function(n){var p=pessoas[n];
-    if(p.entregas>0){p.perf=perfOk?Number(bc.perfBonus||0):0;p.meta=metaOk?Number(bc.metaBonus||0):0;}
+    p.pctPartic=validas>0?Math.round(p.viagensValidas/validas*100):0;
+    p.qualificado=(validas>0&&p.pctPartic>=minPct);
+    if(p.entregas>0&&p.qualificado){p.perf=perfOk?Number(bc.perfBonus||0):0;p.meta=metaOk?Number(bc.metaBonus||0):0;}
     p.total=Math.max(0,p.base+p.perf+p.meta-p.desconto);
   });
-  eq.perfOk=perfOk;eq.metaOk=metaOk;
+  eq.perfOk=perfOk;eq.metaOk=metaOk;eq.validas=validas;eq.minPartic=minPct;
   return {pessoas:pessoas,equipe:eq};
 }
 function bonusDePessoa(nome){var r=calcBonusEquipe(S.entregas,S.bonusConfig);var k=Object.keys(r.pessoas).find(function(n){return normStr(n)===normStr(nome);});return k?r.pessoas[k]:{nome:nome,papel:'',entregas:0,base:0,perf:0,meta:0,desconto:0,total:0,viagens:0};}
