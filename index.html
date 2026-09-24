@@ -245,6 +245,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <div class="card-hd"><span class="card-title">Taxa de conclusão</span><span id="dTaxa" style="font-weight:700;color:var(--teal)">0%</span></div>
       <div class="prog-bar"><div class="prog-fill" id="dProg" style="width:0%"></div></div>
     </div>
+    <div id="dSemFotoCard"></div>
     <div class="card">
       <div class="card-hd"><span class="card-title">Performance motoristas</span></div>
       <div class="tbl-wrap">
@@ -981,6 +982,7 @@ function renderDash(){
   document.getElementById('dKm').textContent=kmTotal+' km';
   document.getElementById('dCombust').textContent=brl(combTotal);
   document.getElementById('dCustEnt').textContent=brl(custEnt);
+  renderSemFoto(es);
   // mapa motoristas
   var mp={};
   es.forEach(function(e){
@@ -1369,6 +1371,35 @@ function renderMotoComb(){
     return '<div class="ent-card"><div class="ent-top"><span class="ent-nome">'+esc(a.tipo||'')+' — '+Number(a.litros||0).toFixed(1)+' L</span><span style="font-weight:700">'+brl(a.valor)+'</span></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:3px">'+fmtDate(a.data)+(a.km?' — '+a.km+' km':'')+(a.posto?' — '+esc(a.posto):'')+'</div></div>';
   }).join(''):'<div style="text-align:center;padding:20px;color:var(--muted)">Nenhum abastecimento registrado</div>';
+}
+
+// v35: conformidade da foto no grupo — entregas fechadas sem foto.
+// Retirada na loja nao exige foto (o cliente leva o produto na mao).
+function renderSemFoto(es){
+  var alvo=document.getElementById('dSemFotoCard');
+  if(!alvo)return;
+  var fin=es.filter(function(e){return e.finalizada&&String(e.id)!==CFG_ID&&!ehRetirada(e);});
+  var sem=fin.filter(function(e){return !e.fotoEnviada;});
+  var pct=fin.length?Math.round((fin.length-sem.length)/fin.length*100):100;
+  var porPessoa={};
+  sem.forEach(function(e){var n=e.motoristaNome||'—';porPessoa[n]=(porPessoa[n]||0)+1;});
+  var lista=Object.keys(porPessoa).sort(function(a,b){return porPessoa[b]-porPessoa[a];})
+    .map(function(n){return '<span class="badge b-red" style="margin:0 6px 6px 0;padding:6px 10px">'+esc(n)+': '+porPessoa[n]+'</span>';}).join('');
+  var detalhe=sem.slice().reverse().slice(0,10).map(function(e){
+    var quando=e.dataEntrega?diaBR(e.dataEntrega):(e.criadoEm?fmtDate(e.criadoEm):'—');
+    return '<tr><td><strong>'+esc(e.cliente)+'</strong></td><td>'+esc(e.motoristaNome||'—')+'</td><td>'+quando+'</td></tr>';
+  }).join('');
+  alvo.innerHTML='<div class="card">'+
+    '<div class="card-hd"><span class="card-title">Foto no grupo</span>'+
+      '<span style="font-weight:700;color:'+(pct>=100?'var(--success)':(pct>=90?'var(--orange)':'var(--danger)'))+'">'+pct+'%</span></div>'+
+    '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+(pct>=100?'var(--success)':'var(--orange)')+'"></div></div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px">'+
+      (fin.length-sem.length)+' de '+fin.length+' entregas finalizadas com foto confirmada. Retiradas na loja não contam.</div>'+
+    (sem.length?('<div style="margin-top:12px">'+lista+'</div>'+
+      '<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Cliente</th><th>Motorista</th><th>Data</th></tr></thead><tbody>'+detalhe+'</tbody></table></div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:8px">Confira por amostragem no grupo: marcar o quadradinho não prova que a foto foi enviada.</div>'):
+      '<div class="alert alert-green" style="margin-top:10px;font-size:12px">Todas as entregas do mês saíram com foto confirmada.</div>')+
+    '</div>';
 }
 
 // ========== BONIFICAÇÃO ==========
@@ -1768,8 +1799,8 @@ function renderFinalizacao(e){
     '<div class="fin-section" style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px">'+
     '<div id="btnFoto" onclick="toggleFoto()" style="display:flex;align-items:center;gap:12px;cursor:pointer">'+
     '<div id="icoFoto" style="font-size:28px">'+(foto?'✅':'⬜')+'</div>'+
-    '<div><div style="font-weight:600;font-size:14px">Foto enviada no grupo</div>'+
-    '<div style="font-size:12px;color:var(--muted)">Foto do produto entregue</div></div>'+
+    '<div><div style="font-weight:600;font-size:14px">Foto enviada no grupo <span style="color:var(--danger)">*</span></div>'+
+    '<div style="font-size:12px;color:var(--muted)">Obrigatório — sem marcar, a entrega não finaliza</div></div>'+
     '</div>'+
     '</div>'+
     // KM
@@ -1940,6 +1971,8 @@ function confirmarEnt(){
   if(_temDano&&!_resSelec.Parcial&&!itensRestantes.length){alert('Marque qual produto teve problema (ou selecione "Não, tudo certo" acima).');return;}
   if(usaItens&&itensRestantes.some(function(i){return !i.motivo||!i.responsavel;})){alert('Em cada item marcado, escolha o que houve e de quem foi a responsabilidade.');return;}
   if(!retirada&&EXIGIR_ASSINATURA&&!hasSig()){alert('Coloque a assinatura do cliente para finalizar.');return;}
+  // v35: foto no grupo e regra da loja — sem ela a entrega nao fecha.
+  if(!retirada&&!_fotoSel){alert('Mande a foto do produto entregue no grupo e marque o quadradinho "Foto enviada no grupo". Sem isso a entrega não pode ser finalizada.');return;}
   var kmEl=document.getElementById('finKmCh');
   e.kmChegada=kmEl&&kmEl.value?parseInt(kmEl.value):e.kmChegada;
   e.horaChegada=Date.now();
