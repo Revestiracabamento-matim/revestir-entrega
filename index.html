@@ -1076,6 +1076,11 @@ function salvarEntrega(){
   // Obrigatório: (OS ou Nome) + Bairro
   if(!cl&&!os){document.getElementById('novaMsg').innerHTML='<div class="alert alert-red">Informe o código da venda (O.S.) ou o nome do cliente</div>';return;}
   if(!bairro){document.getElementById('novaMsg').innerHTML='<div class="alert alert-red">O bairro é obrigatório para o motorista saber onde entregar</div>';return;}
+  if(os&&_rvDupLiberada!==os){
+    var _dupA=rvEntregaDaOS(os);
+    if(_dupA){document.getElementById('novaMsg').innerHTML=rvAvisoDupOS(os,_dupA,'adm');return;}
+  }
+  _rvDupLiberada='';
   var mt=S.motoristas.find(function(m){return String(m.id)===String(mid);});
   S.entregas.push({id:uid(),mes:curMonth,os:os,cliente:cl||('O.S. '+os),telefone:document.getElementById('nTelefone').value.trim(),endereco:document.getElementById('nEndereco').value.trim(),bairro:bairro,cidade:document.getElementById('nCidade').value.trim(),dataAgendada:document.getElementById('nData').value,produtos:'',motoristaId:mid,motoristaNome:mt?mt.nome:'',obs:document.getElementById('nObs').value.trim(),status:'agendado',criadoEm:Date.now(),ocorrencia:null,assinatura:null,kmSaida:null,kmChegada:null,horaSaida:null,horaChegada:null,finalizada:false,fotoEnviada:false});
   save();
@@ -1122,6 +1127,11 @@ function salvarEntregaMoto(){
   var msgEl=document.getElementById('mNMsg');
   if(!cl&&!os){msgEl.innerHTML='<div class="alert alert-red">Informe o código da venda ou o nome do cliente</div>';return;}
   if(!bairro){msgEl.innerHTML='<div class="alert alert-red">O bairro é obrigatório</div>';return;}
+  if(os&&_rvDupLiberada!==os){
+    var _dupM=rvEntregaDaOS(os);
+    if(_dupM){msgEl.innerHTML=rvAvisoDupOS(os,_dupM,'moto');return;}
+  }
+  _rvDupLiberada='';
   var mid=me?me.id:'';
   var mnome=me?me.name:'';
   S.entregas.push({id:uid(),mes:curMonth,os:os,cliente:cl||('O.S. '+os),telefone:document.getElementById('mNTelefone').value.trim(),endereco:document.getElementById('mNEndereco').value.trim(),bairro:bairro,cidade:document.getElementById('mNCidade').value.trim(),dataAgendada:document.getElementById('mNData').value,produtos:'',motoristaId:mid,motoristaNome:mnome,obs:document.getElementById('mNObs').value.trim(),status:'agendado',criadoEm:Date.now(),ocorrencia:null,assinatura:null,kmSaida:null,kmChegada:null,horaSaida:null,horaChegada:null,finalizada:false,fotoEnviada:false});
@@ -2110,6 +2120,35 @@ function strParaExt(s){
 }
 function respConfirmado(e){var x=extDe(e);return x.respAdmin||'';}
 function respExibir(e){var x=extDe(e);return x.respAdmin?RESP_LABELS[x.respAdmin]+' (confirmado)':(x.responsavel?RESP_LABELS[x.responsavel]+' (sugerido — aguarda admin)':'—');}
+// v50: a trava de O.S. repetida so existia no botao Buscar. Quem digitava a O.S. a mao criava entrega duplicada
+// (viagem a mais, KPI inflado e bonus pago duas vezes). Agora a trava e na gravacao, dos dois lados.
+var _rvDupLiberada='';
+function rvEntregaDaOS(os){
+  var alvo=String(os||'').trim().toUpperCase();
+  if(!alvo)return null;
+  var achou=null;
+  var todas=(_all&&_all.entregas)?_all.entregas:[];
+  for(var i=0;i<todas.length;i++){
+    if(String(todas[i].id)===CFG_ID)continue;
+    if(String(todas[i].os||'').trim().toUpperCase()===alvo){achou=todas[i];break;}
+  }
+  if(!achou){
+    for(var j=0;j<(S.entregas||[]).length;j++){
+      if(String(S.entregas[j].os||'').trim().toUpperCase()===alvo){achou=S.entregas[j];break;}
+    }
+  }
+  return achou;
+}
+function rvAvisoDupOS(os,dup,fn){
+  return '<div class="alert alert-red">⚠️ <strong>Já existe entrega para a O.S. '+esc(String(os).toUpperCase())+'</strong>'+
+    (dup&&dup.cliente?(' — '+esc(dup.cliente)):'')+'. Procure na aba Entregas.<br>'+
+    'Se for uma <strong>nova viagem da mesma venda por pendência</strong>, use o botão de reentrega na entrega original.<br>'+
+    '<button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="rvLiberarDupOS(\''+esc(String(os).toUpperCase())+'\',\''+fn+'\')">Sim, é uma segunda entrega desta mesma venda — cadastrar assim mesmo</button></div>';
+}
+function rvLiberarDupOS(os,fn){
+  _rvDupLiberada=String(os||'').trim().toUpperCase();
+  if(fn==='moto')salvarEntregaMoto(); else salvarEntrega();
+}
 function ehReentrega(e){return extDe(e).seq>1;}
 function ehRetirada(e){return !!(e.ocorrencia&&String(e.ocorrencia.resultado||'').indexOf('Retirada')>=0);}
 function ehTotal(e){return !!(e.ocorrencia&&String(e.ocorrencia.resultado||'').indexOf('Total')>=0);}
