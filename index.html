@@ -140,6 +140,17 @@ tr:hover td{background:var(--bg)}
 .abast-item:last-child{border:none}
 .hidden{display:none!important}
 @media(max-width:480px){.metrics.c4{grid-template-columns:repeat(2,1fr)}.metrics.c3{grid-template-columns:repeat(3,1fr)}.form-row{grid-template-columns:1fr}}
+/* v52 — celular de verdade (Android 360px e iPhone): cabecalho que quebra linha, alvo de toque e indicadores em 2 colunas */
+@media(max-width:480px){
+  .header{flex-wrap:wrap;height:auto;min-height:56px;padding:8px 12px;row-gap:6px}
+  .header>*{min-width:0}
+  .header-logo{height:26px}
+  .header select{max-width:150px;min-height:34px;flex:0 1 auto}
+  .header .btn{min-height:34px;padding:7px 10px}
+}
+@media(max-width:420px){
+  .metrics.c3{grid-template-columns:repeat(2,1fr)}
+}
 
 /* ===================== v32 — TEMA REVESTIR (app de entrega) =====================
    Mesmas cores e mesma tipografia do dashboard. O teal da marca so preenche:
