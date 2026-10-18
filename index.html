@@ -151,6 +151,11 @@ tr:hover td{background:var(--bg)}
 @media(max-width:420px){
   .metrics.c3{grid-template-columns:repeat(2,1fr)}
 }
+/* v55 — percentual de entrega com os numeros por tras */
+.ep-hoje{display:flex;flex-direction:column;gap:2px}
+.ep-hoje-r{font-size:12px;color:var(--rv-sec)}
+.ep-hoje b{font-size:19px;font-weight:700;color:var(--rv-tinta)}
+.ep-hoje-s{font-size:12px;color:var(--rv-sec)}
 
 /* ===================== v32 — TEMA REVESTIR (app de entrega) =====================
    Mesmas cores e mesma tipografia do dashboard. O teal da marca so preenche:
@@ -242,7 +247,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
   <!-- DASHBOARD -->
   <div id="tDash" class="tab-pane active">
     <div class="metrics c4">
-      <div class="metric"><div class="metric-val" id="dAg">0</div><div class="metric-lbl">Agendadas</div></div>
+      <div class="metric"><div class="metric-val" id="dAg">0</div><div class="metric-lbl">Entregas no mês</div></div>
       <div class="metric"><div class="metric-val" style="color:var(--success)" id="dEnt">0</div><div class="metric-lbl">Entregues</div></div>
       <div class="metric"><div class="metric-val" style="color:var(--danger)" id="dOc">0</div><div class="metric-lbl">Ocorrências</div></div>
       <div class="metric"><div class="metric-val" style="color:var(--orange)" id="dPend">0</div><div class="metric-lbl">Pendentes</div></div>
@@ -253,9 +258,11 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <div class="metric"><div class="metric-val" id="dCustEnt" style="font-size:16px">R$ 0</div><div class="metric-lbl">Custo/entrega</div></div>
     </div>
     <div class="card">
-      <div class="card-hd"><span class="card-title">Taxa de conclusão</span><span id="dTaxa" style="font-weight:700;color:var(--teal)">0%</span></div>
+      <div class="card-hd"><span class="card-title">Entregas do mês</span><span id="dTaxa" style="font-weight:700;color:var(--teal)">0 de 0 · 0%</span></div>
       <div class="prog-bar"><div class="prog-fill" id="dProg" style="width:0%"></div></div>
+      <div id="dTaxaSub" style="font-size:12px;color:var(--rv-sec);margin-top:9px"></div>
     </div>
+    <div class="card"><div id="dHoje"></div></div>
     <div id="dSemFotoCard"></div>
     <div class="card">
       <div class="card-hd"><span class="card-title">Performance motoristas</span></div>
@@ -975,6 +982,53 @@ function renderAll(){
 }
 
 // ========== DASHBOARD ==========
+// v55: o painel mostrava so "Taxa de conclusao 63%" — numero solto, sem dizer de quanto.
+// Agora: quantas de quantas, quantas faltam, e o mesmo recorte para o dia de hoje.
+function _epFinalizada(e){return e&&(e.status==='entregue'||e.status==='ocorrencia');}
+function rvEntregaPct(){
+  var es=S.entregas||[];
+  var hoje=hojeISO();
+  var mes={total:es.length,feitas:0,entregues:0,ocorr:0};
+  var dia={total:0,feitas:0,entregues:0,ocorr:0};
+  es.forEach(function(e){
+    if(_epFinalizada(e))mes.feitas++;
+    if(e.status==='entregue')mes.entregues++;
+    if(e.status==='ocorrencia')mes.ocorr++;
+    if(normDia(e.dataAgendada)===hoje){
+      dia.total++;
+      if(_epFinalizada(e))dia.feitas++;
+      if(e.status==='entregue')dia.entregues++;
+      if(e.status==='ocorrencia')dia.ocorr++;
+    }
+  });
+  mes.falta=mes.total-mes.feitas; dia.falta=dia.total-dia.feitas;
+  mes.pct=mes.total?Math.round(mes.feitas/mes.total*100):0;
+  dia.pct=dia.total?Math.round(dia.feitas/dia.total*100):0;
+  return {mes:mes,dia:dia};
+}
+function renderEntregaPct(){
+  var R=rvEntregaPct();
+  var t=document.getElementById('dTaxa');
+  if(t)t.textContent=R.mes.feitas+' de '+R.mes.total+' · '+R.mes.pct+'%';
+  var p=document.getElementById('dProg');
+  if(p)p.style.width=R.mes.pct+'%';
+  var sub=document.getElementById('dTaxaSub');
+  if(sub){
+    sub.innerHTML=R.mes.total
+      ? ('<strong>'+R.mes.entregues+'</strong> entregues · <strong>'+R.mes.ocorr+'</strong> com ocorrência · <strong style="color:var(--orange)">'+R.mes.falta+'</strong> ainda a entregar')
+      : 'Nenhuma entrega cadastrada neste mês.';
+  }
+  var hj=document.getElementById('dHoje');
+  if(hj){
+    hj.innerHTML=R.dia.total
+      ? ('<div class="ep-hoje"><span class="ep-hoje-r">Agendadas para hoje</span>'+
+         '<b>'+R.dia.feitas+' de '+R.dia.total+' · '+R.dia.pct+'%</b>'+
+         '<span class="ep-hoje-s">'+(R.dia.falta?((R.dia.falta===1?'falta 1 entrega':'faltam '+R.dia.falta+' entregas')):'tudo concluído')+'</span>'+
+         '<div class="prog-bar" style="margin-top:8px"><div class="prog-fill" style="width:'+R.dia.pct+'%"></div></div></div>')
+      : '<div class="ep-hoje"><span class="ep-hoje-r">Agendadas para hoje</span><b>nenhuma</b><span class="ep-hoje-s">não há entrega marcada para hoje</span></div>';
+  }
+}
+
 function renderDash(){
   var es=S.entregas;
   var total=es.length,ok=es.filter(function(e){return e.status==='entregue';}).length;
@@ -988,8 +1042,7 @@ function renderDash(){
   document.getElementById('dEnt').textContent=ok;
   document.getElementById('dOc').textContent=oc;
   document.getElementById('dPend').textContent=pend;
-  document.getElementById('dTaxa').textContent=taxa+'%';
-  document.getElementById('dProg').style.width=taxa+'%';
+  renderEntregaPct(); // v55: taxa com os numeros por tras + o recorte de hoje
   document.getElementById('dKm').textContent=kmTotal+' km';
   document.getElementById('dCombust').textContent=brl(combTotal);
   document.getElementById('dCustEnt').textContent=brl(custEnt);
