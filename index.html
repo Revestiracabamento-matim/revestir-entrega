@@ -1454,7 +1454,8 @@ function renderSemFoto(es){
   if(!alvo)return;
   var fin=es.filter(function(e){return e.finalizada&&String(e.id)!==CFG_ID&&!ehRetirada(e);});
   var sem=fin.filter(function(e){return !e.fotoEnviada;});
-  var pct=fin.length?Math.round((fin.length-sem.length)/fin.length*100):100;
+  var semDados=(fin.length===0); // v56: sem entrega finalizada nao existe percentual
+  var pct=semDados?0:Math.round((fin.length-sem.length)/fin.length*100);
   var porPessoa={};
   sem.forEach(function(e){var n=e.motoristaNome||'—';porPessoa[n]=(porPessoa[n]||0)+1;});
   var lista=Object.keys(porPessoa).sort(function(a,b){return porPessoa[b]-porPessoa[a];})
@@ -1465,14 +1466,14 @@ function renderSemFoto(es){
   }).join('');
   alvo.innerHTML='<div class="card">'+
     '<div class="card-hd"><span class="card-title">Foto no grupo</span>'+
-      '<span style="font-weight:700;color:'+(pct>=100?'var(--success)':(pct>=90?'var(--orange)':'var(--danger)'))+'">'+pct+'%</span></div>'+
-    '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+(pct>=100?'var(--success)':'var(--orange)')+'"></div></div>'+
+      '<span style="font-weight:700;color:'+(semDados?'var(--muted)':(pct>=100?'var(--success)':(pct>=90?'var(--orange)':'var(--danger)')))+'">'+(semDados?'—':(pct+'%'))+'</span></div>'+
+    '<div class="prog-bar"><div class="prog-fill" style="width:'+(semDados?0:pct)+'%;background:'+(pct>=100?'var(--success)':'var(--orange)')+'"></div></div>'+
     '<div style="font-size:12px;color:var(--muted);margin-top:8px">'+
-      (fin.length-sem.length)+' de '+fin.length+' entregas finalizadas com foto confirmada. Retiradas na loja não contam.</div>'+
+      (semDados?'Nenhuma entrega finalizada ainda neste mês — não há foto a conferir.':((fin.length-sem.length)+' de '+fin.length+' entregas finalizadas com foto confirmada. Retiradas na loja não contam.'))+'</div>'+
     (sem.length?('<div style="margin-top:12px">'+lista+'</div>'+
       '<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Cliente</th><th>Motorista</th><th>Data</th></tr></thead><tbody>'+detalhe+'</tbody></table></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:8px">Confira por amostragem no grupo: marcar o quadradinho não prova que a foto foi enviada.</div>'):
-      '<div class="alert alert-green" style="margin-top:10px;font-size:12px">Todas as entregas do mês saíram com foto confirmada.</div>')+
+      (semDados?'':'<div class="alert alert-green" style="margin-top:10px;font-size:12px">Todas as entregas do mês saíram com foto confirmada.</div>'))+
     '</div>';
 }
 
@@ -1511,7 +1512,7 @@ function renderBonus(){
   document.getElementById('bonusEquipeResumo').innerHTML='<div class="card"><div class="card-hd"><span class="card-title">Equipe no mês</span></div>'+
     '<div class="metrics c4">'+
     '<div class="metric"><div class="metric-val">'+eq.concluidas+'</div><div class="metric-lbl">Entregas que pagam</div></div>'+
-    '<div class="metric"><div class="metric-val" style="color:'+(eq.perfOk?'var(--success)':'var(--danger)')+'">'+eq.taxa+'%</div><div class="metric-lbl">Sem ocorrência da equipe (mín. '+bc.perfTaxaMin+'%)</div></div>'+
+    '<div class="metric"><div class="metric-val" style="color:'+(eq.semViagem?'var(--muted)':(eq.perfOk?'var(--success)':'var(--danger)'))+'">'+(eq.semViagem?'—':(eq.taxa+'%'))+'</div><div class="metric-lbl">'+(eq.semViagem?'Sem viagem finalizada ainda':('Sem ocorrência da equipe (mín. '+bc.perfTaxaMin+'%)'))+'</div></div>'+
     '<div class="metric"><div class="metric-val" style="color:var(--orange)">'+eq.reentregas+'</div><div class="metric-lbl">Reentregas</div></div>'+
     '<div class="metric"><div class="metric-val" style="color:var(--danger)">'+brl(eq.descontado)+'</div><div class="metric-lbl">Descontado (culpa equipe)</div></div></div>'+
     (eq.ocPendConf?'<div class="alert alert-orange" style="margin-top:10px;font-size:12px">⚠️ '+eq.ocPendConf+' ocorrência(s) aguardando você confirmar o responsável (Entregas → Ver → Confirmar). Até lá não descontam.</div>':'')+
@@ -1739,7 +1740,7 @@ function renderMotoBonus(){
     '<div style="font-size:13px;display:flex;flex-direction:column;gap:8px">'+
     '<div style="display:flex;justify-content:space-between"><span>Sua parte nas entregas ('+p.entregas+')</span><span><strong>'+brl(p.base)+'</strong></span></div>'+
     '<div style="display:flex;justify-content:space-between"><span>Sua participação ('+p.viagensValidas+' de '+eq.validas+' viagens, mín. '+eq.minPartic+'%)</span><span><strong style="color:'+(p.qualificado?'var(--success)':'var(--danger)')+'">'+p.pctPartic+'%</strong></span></div>'+
-    '<div style="display:flex;justify-content:space-between"><span>Performance da equipe ('+eq.taxa+'% sem ocorrência, mín. '+bc.perfTaxaMin+'%)</span><span><strong style="color:'+(eq.perfOk&&p.qualificado?'var(--success)':'var(--danger)')+'">'+(eq.perfOk?(p.qualificado?'+'+brl(bc.perfBonus):'Fora'):'Bloqueado')+'</strong></span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span>Performance da equipe ('+(eq.semViagem?'ainda sem viagem finalizada':(eq.taxa+'% sem ocorrência, mín. '+bc.perfTaxaMin+'%'))+')</span><span><strong style="color:'+(eq.perfOk&&p.qualificado?'var(--success)':'var(--danger)')+'">'+(eq.perfOk?(p.qualificado?'+'+brl(bc.perfBonus):'Fora'):'Bloqueado')+'</strong></span></div>'+
     '<div style="display:flex;justify-content:space-between"><span>Meta da equipe ('+bc.meta+')</span><span><strong style="color:'+(eq.metaOk&&p.qualificado?'var(--success)':'var(--muted)')+'">'+(eq.metaOk?(p.qualificado?'+'+brl(bc.metaBonus):'Fora'):'Pendente')+'</strong></span></div>'+
     (p.desconto>0?'<div style="display:flex;justify-content:space-between"><span>Retrabalho (reentrega por culpa da equipe)</span><span><strong style="color:var(--danger)">− '+brl(p.desconto)+'</strong></span></div>':'')+
     '</div>'+
@@ -2359,8 +2360,9 @@ function calcBonusEquipe(es,bc){
     if(entregaElegivelBonus(e)){eq.concluidas++;var b=repartir(Number(bc.porEntrega||0),mem,bc);Object.keys(b).forEach(function(n){P(n,'ajudante').base+=b[n];pessoas[n].entregas++;});}
   });
   var validas=eq.viagens-eq.retiradas;
-  eq.taxa=validas>0?Math.round((validas-eq.ocEquipe)/validas*100):100;
-  var perfOk=eq.taxa>=Number(bc.perfTaxaMin===undefined?97:bc.perfTaxaMin);
+  eq.semViagem=(validas<=0); // v56: sem viagem valida nao existe taxa
+  eq.taxa=validas>0?Math.round((validas-eq.ocEquipe)/validas*100):0;
+  var perfOk=(validas>0)&&(eq.taxa>=Number(bc.perfTaxaMin===undefined?97:bc.perfTaxaMin));
   var metaOk=eq.concluidas>=Number(bc.meta||0);
   var minPct=Number(bc.minPartic===undefined?50:bc.minPartic);
   Object.keys(pessoas).forEach(function(n){var p=pessoas[n];
