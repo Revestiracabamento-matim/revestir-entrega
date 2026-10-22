@@ -201,9 +201,70 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
 
 .field input,.field select,.field textarea{border:1px solid #DDD8CE;border-radius:9px;min-height:48px;font-size:16px}
 .field label{font-size:12px;color:var(--rv-sec);font-weight:600}
+/* ===== v58 — Gestão à vista ===== */
+#entAVista .av-card{background:#fff;border:1px solid var(--rv-linha);border-radius:12px;padding:16px;margin-bottom:14px}
+#entAVista .av-grade2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.av-tit{font-family:'Archivo','DM Sans',system-ui,sans-serif;font-size:16px;font-weight:700;color:#141413;margin-bottom:2px}
+.av-sub2{font-size:12px;color:#5C5A55;margin-bottom:12px;line-height:1.5}
+.av-lbl{font-size:11px;font-weight:600;color:#5C5A55;text-transform:uppercase;letter-spacing:.4px}
+.av-num{font-family:'Archivo','DM Sans',system-ui,sans-serif;font-size:24px;font-weight:700;color:#141413;line-height:1.15;margin-top:3px}
+.av-sub{font-size:11px;color:#8A867E;margin-top:2px;line-height:1.4}
+.av-mudo{color:#8A867E}
+.av-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-content:center}
+.av-vazio{font-size:13px;color:#8A867E;padding:18px 0;text-align:center}
+.av-nota{font-size:11px;color:#5C5A55;margin-top:8px;line-height:1.5}
+.av-tracinho{display:inline-block;width:14px;border-top:1px dashed #5C5A55;vertical-align:middle;margin-right:4px}
+/* termometro */
+.av-termo-topo{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.av-pct{font-family:'Archivo','DM Sans',system-ui,sans-serif;font-size:26px;font-weight:700;line-height:1}
+.av-trilho{position:relative;height:14px;background:#EFEDE7;border-radius:999px;overflow:visible}
+.av-preenche{height:14px;border-radius:999px;transition:width .35s ease}
+.av-marca{position:absolute;top:-4px;width:2px;height:22px;background:#141413;border-radius:1px}
+.av-marca:after{content:'';position:absolute;left:-3px;top:-4px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #141413}
+.av-termo-pes{display:flex;justify-content:space-between;font-size:12px;color:#5C5A55;margin-top:8px}
+/* barras deitadas */
+.av-bh-l{display:grid;grid-template-columns:minmax(96px,1.25fr) 2.6fr minmax(74px,auto);gap:10px;align-items:center;padding:5px 0}
+.av-bh-n{font-size:12.5px;color:#141413;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av-ponto{width:9px;height:9px;border-radius:3px;flex:none}
+.av-bh-t{background:#F3F1EC;border-radius:5px;height:17px;overflow:hidden}
+.av-bh-b{height:17px;border-radius:0 5px 5px 0;transition:width .35s ease}
+.av-bh-v{font-size:12.5px;font-weight:700;color:#141413;text-align:right;white-space:nowrap}
+.av-bh-nota{font-size:11px;margin:0 0 7px 15px}
+.av-falta{color:#A04F00}
+.av-falta.av-top{color:#17795E}
+/* svg */
+.av-svg{width:100%;height:auto;display:block}
+.av-rolax{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.av-leg{display:flex;gap:16px;font-size:12px;color:#5C5A55;margin-bottom:8px;flex-wrap:wrap}
+.av-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* anel */
+.av-anel{width:84px;height:84px;flex:none}
+.av-anel-c{display:flex;gap:14px;align-items:center}
+.av-anel-t{min-width:0}
+.av-anel-s{font-size:11.5px;color:#5C5A55;margin-top:5px;line-height:1.5}
+/* celular de verdade */
+@media(max-width:760px){
+  #entAVista .av-grade2{grid-template-columns:1fr}
+  .av-nums{grid-template-columns:1fr 1fr}
+  .av-bh-l{grid-template-columns:minmax(70px,1fr) 1.6fr minmax(62px,auto);gap:7px}
+  .av-bh-n{font-size:11.5px}
+  .av-bh-v{font-size:11.5px}
+  .av-pct{font-size:22px}
+  .av-num{font-size:20px}
+  .av-bh-nota{margin-left:0;font-size:10.5px}
+}
+
 </style>
 </head>
 <body>
+<!-- v57 — aviso de lancamento que nao foi salvo na nuvem -->
+<div id="rvFilaAviso" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9999;
+  background:#B4271F;color:#fff;padding:12px 14px;font-size:13px;font-weight:600;
+  box-shadow:0 -2px 12px rgba(0,0,0,.25);line-height:1.4">
+  <span id="rvFilaTxt"></span>
+  <button type="button" onclick="reprocessarFalhas()" style="margin-left:8px;padding:6px 12px;border:0;
+    border-radius:7px;background:#fff;color:#B4271F;font-weight:700;font-family:inherit;font-size:13px;cursor:pointer">Tentar de novo</button>
+</div>
 
 <!-- LOGIN -->
 <div id="loginScreen">
@@ -257,6 +318,7 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <div class="metric"><div class="metric-val" id="dCombust" style="font-size:16px">R$ 0</div><div class="metric-lbl">Combustível</div></div>
       <div class="metric"><div class="metric-val" id="dCustEnt" style="font-size:16px">R$ 0</div><div class="metric-lbl">Custo/entrega</div></div>
     </div>
+    <div id="entAVista"></div>
     <div class="card">
       <div class="card-hd"><span class="card-title">Entregas do mês</span><span id="dTaxa" style="font-weight:700;color:var(--teal)">0 de 0 · 0%</span></div>
       <div class="prog-bar"><div class="prog-fill" id="dProg" style="width:0%"></div></div>
@@ -749,17 +811,42 @@ function chamarPorta(payload,onOk,onErr){
   .catch(function(e){onErr(e);});
 }
 var _fila=[],_filaAtiva=false,_filaRetry=[];
-function enfileirar(it){_fila.push(it);if(!_filaAtiva)processarFila();}
-function enfileirarDelete(sheet,id){_fila.push({_del:true,sheet:sheet,id:id});if(!_filaAtiva)processarFila();}
+var RV_FILA_TENT=4; // tentativas automaticas antes de parar e avisar
+function enfileirar(it){_fila.push(it);rvStatusFila();if(!_filaAtiva)processarFila();}
+function enfileirarDelete(sheet,id){_fila.push({_del:true,sheet:sheet,id:id});rvStatusFila();if(!_filaAtiva)processarFila();}
+function rvFilaPendentes(){return _fila.length+(_filaAtiva?1:0)+_filaRetry.length;}
+function rvStatusFila(){
+  var box=document.getElementById('rvFilaAviso'),txt=document.getElementById('rvFilaTxt');
+  if(!box||!txt)return;
+  var n=_filaRetry.length;
+  if(!n){box.style.display='none';return;}
+  txt.innerHTML='&#9888; '+n+' lan&ccedil;amento'+(n===1?'':'s')+' ainda N&Atilde;O salvo'+(n===1?'':'s')+' na nuvem.'
+    +'<br><span style="font-weight:400">N&atilde;o feche o aplicativo. Procure sinal e toque em "Tentar de novo".</span>';
+  box.style.display='block';
+}
 function processarFila(){
-  if(!_fila.length){_filaAtiva=false;return;}
+  if(!_fila.length){_filaAtiva=false;rvStatusFila();return;}
   _filaAtiva=true;var it=_fila.shift();
   var payload=it._del?{action:'deleteRow',token:_token,sheet:it.sheet,id:it.id}:{action:'saveRow',token:_token,sheet:it.sheet,row:it.row};
   chamarPorta(payload,
-    function(res){if(!res||!res.ok){console.error('[fila] PORTA RECUSOU',it.sheet,(res&&res.erro)||'',it);_filaRetry.push(it);}processarFila();},
-    function(err){console.error('[fila] FALHA REDE',it.sheet,err);_filaRetry.push(it);processarFila();});
+    function(res){if(!res||!res.ok){console.error('[fila] PORTA RECUSOU',it.sheet,(res&&res.erro)||'',it);it._tent=(it._tent||0)+1;_filaRetry.push(it);}processarFila();},
+    function(err){console.error('[fila] FALHA REDE',it.sheet,err);it._tent=(it._tent||0)+1;_filaRetry.push(it);processarFila();});
 }
-function reprocessarFalhas(){if(!_filaRetry.length)return 0;var n=_filaRetry.length;_fila=_fila.concat(_filaRetry);_filaRetry=[];if(!_filaAtiva)processarFila();return n;}
+function reprocessarFalhas(auto){
+  if(!_filaRetry.length){rvStatusFila();return 0;}
+  var vai=auto?_filaRetry.filter(function(it){return (it._tent||0)<RV_FILA_TENT;}):_filaRetry.slice();
+  if(!vai.length){rvStatusFila();return 0;}
+  _filaRetry=_filaRetry.filter(function(it){return vai.indexOf(it)<0;});
+  if(!auto)vai.forEach(function(it){it._tent=0;});
+  var n=vai.length;_fila=_fila.concat(vai);rvStatusFila();
+  if(!_filaAtiva)processarFila();
+  console.log('[retry] reenfileiradas '+n+' linha(s)');return n;
+}
+// v57: nada fica parado em silencio — tenta de novo sozinho quando o sinal voltar
+window.addEventListener('online',function(){try{reprocessarFalhas(true);}catch(e){}});
+window.addEventListener('beforeunload',function(e){
+  if(rvFilaPendentes()){e.preventDefault();e.returnValue='Ainda ha lancamentos sendo salvos. Se sair agora, eles se perdem.';return e.returnValue;}
+});
 
 // ========== AUTH ==========
 function doLogin(){
@@ -817,7 +904,9 @@ function iniciarSessao(){
       populateSelects();
       renderMotoApp();
     }
-    if(!window._refE){window._refE=setInterval(function(){baixarTudo(function(){
+    if(!window._refE){window._refE=setInterval(function(){
+      if(_filaRetry.length){try{reprocessarFalhas(true);}catch(e){}}
+      baixarTudo(function(){
       var motoAberto=!document.getElementById('appMoto').classList.contains('hidden');
       if(motoAberto)renderMotoApp(); else if(me&&me.role==='admin')renderAll(); else renderMotoApp();
     });},20000);}
@@ -827,10 +916,12 @@ function iniciarSessao(){
 function aplicarPermsEntrega(){
   var adm = (me && me.role==='admin');
   var b = document.getElementById('btnTabBonus'); if(b) b.style.display = adm ? '' : 'none';
-  var fv = document.getElementById('fldNValor'); if(fv) fv.style.display = adm ? '' : 'none';
   var cvf = document.getElementById('cardVeicForm'); if(cvf) cvf.style.display = adm ? '' : 'none';
 }
 function doLogout(){
+  if(_filaAtiva||_fila.length){alert('Ainda estou salvando na nuvem. Espere o aviso vermelho sumir e toque em Sair de novo.');return;}
+  if(_filaRetry.length&&!confirm('Ha '+_filaRetry.length+' lancamento(s) que NAO foram salvos na nuvem. Se sair agora, eles se perdem. Sair mesmo assim?'))return;
+  _fila=[];_filaRetry=[];_filaAtiva=false;rvStatusFila();
   me=null;_token=null;_pendingNova=false;
   if(window._refE){clearInterval(window._refE);window._refE=null;}
   document.getElementById('appAdmin').classList.add('hidden');
@@ -1034,7 +1125,6 @@ function renderDash(){
   var total=es.length,ok=es.filter(function(e){return e.status==='entregue';}).length;
   var oc=es.filter(function(e){return e.status==='ocorrencia';}).length;
   var pend=es.filter(function(e){return e.status==='agendado'||e.status==='em_rota';}).length;
-  var taxa=total>0?Math.round(ok/total*100):0;
   var kmTotal=es.reduce(function(s,e){return s+kmDist(e);},0);
   var combTotal=S.abastecimentos.reduce(function(s,a){return s+Number(a.valor||0);},0);
   var custEnt=ok>0?(combTotal/ok):0;
@@ -1047,6 +1137,7 @@ function renderDash(){
   document.getElementById('dCombust').textContent=brl(combTotal);
   document.getElementById('dCustEnt').textContent=brl(custEnt);
   renderSemFoto(es);
+  try{renderAVistaEnt();}catch(e){console.error('renderAVistaEnt:',e);}
   // mapa motoristas
   var mp={};
   es.forEach(function(e){
@@ -1546,7 +1637,7 @@ function renderOcorr(){
   document.getElementById('ocTotal').textContent=total;
   document.getElementById('ocAbertas').textContent=ab;
   document.getElementById('ocResol').textContent=res;
-  document.getElementById('ocTaxa').textContent=(res>0?Math.round(em24/res*100):0)+'%';
+  document.getElementById('ocTaxa').textContent=(total===0?'—':(res>0?Math.round(em24/res*100)+'%':'0%'));
   var rows=ents.slice().reverse().map(function(e){
     var nat=(e.ocorrencia.naturezas||[]).join(', ');
     var itens=itensDaEntrega(e);
@@ -2457,6 +2548,295 @@ function renderRetrabalho(){
       '<div style="font-size:12px;margin-top:4px"><strong>Por natureza:</strong> '+(Object.keys(porNat).map(function(k){return k+': '+porNat[k].n;}).join(' · ')||'—')+'</div>';
   }
 }
+
+/* ===================== v58 — PAINEL À VISTA: motor de gráficos (app de entrega) =====================
+   SVG puro, sem biblioteca, sem crase, sem encadeamento opcional — roda em iPhone, Android e computador.
+   Paleta conferida no validador: banda de luminosidade, saturação mínima,
+   separação para daltonismo (ΔE 9.7 deutan) e contraste >= 3:1 no fundo claro. */
+var RV_PAL=['#009389','#EA580C','#2563EB','#A21CAF','#65A30D','#9333EA'];
+var RV_COR_OK='#17795E', RV_COR_AT='#A04F00', RV_COR_RUIM='#B4271F';
+var RV_TINTA='#141413', RV_SEC='#5C5A55', RV_LINHA='#E2DED5', RV_MUDO='#8A867E';
+
+/* cor presa à PESSOA, nunca à posição no ranking: filtrar não repinta ninguém */
+var _rvCorMapa={}, _rvCorN=0;
+function rvCorDe(nome){
+  var k=normStr(nome||'');
+  if(!k)return RV_MUDO;
+  if(_rvCorMapa[k]===undefined){_rvCorMapa[k]=_rvCorN%RV_PAL.length;_rvCorN++;}
+  return RV_PAL[_rvCorMapa[k]];
+}
+function rvCorFixar(nomes){
+  // ordena uma vez por nome para a cor de cada pessoa não mudar entre telas
+  (nomes||[]).slice().sort(function(a,b){return String(a).localeCompare(String(b),'pt');})
+    .forEach(function(n){rvCorDe(n);});
+}
+function _gEsc(s){return esc(String(s===undefined||s===null?'':s));}
+function _gId(){return 'g'+Math.random().toString(36).slice(2,9);}
+/* nem todo grafico e dinheiro: contagem de entregas nao pode virar "R$ 12,00" */
+function _gVal(v,o){
+  o=o||{};
+  if(!o.unidade)return brl(v);
+  var n=Number(v)||0;
+  var u=o.unidade;
+  if(n===1&&o.unidade1)u=o.unidade1;          // "1 entrega", nunca "1 entregas"
+  return n.toLocaleString('pt-BR',{maximumFractionDigits:0})+' '+u;
+}
+
+/* ---------- dica que aparece ao passar o dedo/mouse ---------- */
+function rvDicaMontar(){
+  if(document.getElementById('rvDica'))return;
+  var d=document.createElement('div');
+  d.id='rvDica';
+  d.setAttribute('role','tooltip');
+  d.style.cssText='position:fixed;z-index:9999;display:none;pointer-events:none;background:#141413;color:#fff;'+
+    'padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.45;max-width:240px;box-shadow:0 4px 14px rgba(0,0,0,.25)';
+  document.body.appendChild(d);
+}
+function rvDica(ev,html){
+  rvDicaMontar();
+  var d=document.getElementById('rvDica');
+  if(!html){d.style.display='none';return;}
+  d.innerHTML=html;
+  d.style.display='block';
+  var x=ev.clientX+14, y=ev.clientY+14, w=d.offsetWidth, h=d.offsetHeight;
+  if(x+w>window.innerWidth-8)x=window.innerWidth-w-8;
+  if(y+h>window.innerHeight-8)y=ev.clientY-h-12;
+  if(y<8)y=8;
+  d.style.left=x+'px'; d.style.top=y+'px';
+}
+function rvDicaSair(){var d=document.getElementById('rvDica');if(d)d.style.display='none';}
+
+/* ---------- 1) TERMÔMETRO: onde estou x onde eu deveria estar hoje ---------- */
+function rvGTermo(o){
+  var val=Number(o.valor)||0, meta=Number(o.meta)||0;
+  var semMeta=(meta<=0);
+  var pct=semMeta?0:Math.min(100,val/meta*100);
+  var ritmo=Math.max(0,Math.min(100,Number(o.ritmoPct)||0)); // onde o relógio diz que eu deveria estar
+  var cor=semMeta?RV_MUDO:(pct>=ritmo?RV_COR_OK:(pct>=ritmo-10?RV_COR_AT:RV_COR_RUIM));
+  var h='<div class="av-termo">';
+  h+='<div class="av-termo-topo"><span class="av-lbl">'+_gEsc(o.rotulo||'Vendido no mês')+'</span>'+
+     '<span class="av-pct" style="color:'+cor+'">'+(semMeta?'—':(Math.round(pct)+'%'))+'</span></div>';
+  h+='<div class="av-trilho" role="img" aria-label="'+_gEsc((o.rotulo||'')+': '+brl(val)+' de '+brl(meta))+'">';
+  h+='<div class="av-preenche" style="width:'+pct.toFixed(1)+'%;background:'+cor+'"></div>';
+  if(!semMeta&&ritmo>0&&ritmo<100)
+    h+='<div class="av-marca" style="left:'+ritmo.toFixed(1)+'%" title="onde o mês deveria estar hoje"></div>';
+  h+='</div>';
+  h+='<div class="av-termo-pes"><span>'+brl(val)+'</span><span>meta '+(semMeta?'não definida':brl(meta))+'</span></div>';
+  if(!semMeta&&ritmo>0&&ritmo<100)
+    h+='<div class="av-nota">A marca mostra onde o mês deveria estar hoje ('+Math.round(ritmo)+'%). '+
+       (pct>=ritmo?'Está na frente do relógio.':'Está atrás do relógio.')+'</div>';
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 2) BARRAS DEITADAS: ranking de gente ---------- */
+function _avNomeCurto(n){
+  // no celular o sobrenome nao cabe e vira reticencia: mostra o primeiro nome
+  var p=String(n||'').trim().split(/\s+/);
+  if(p.length<2)return n;
+  return p[0]+' '+p[1].charAt(0)+'.';
+}
+function rvGBarraH(itens,o){
+  o=o||{};
+  var cel=(window.innerWidth||1200)<760;
+  var lista=(itens||[]).filter(function(x){return x&&Number(x.valor)>=0;});
+  if(!lista.length)return '<div class="av-vazio">'+_gEsc(o.vazio||'Sem dado no período.')+'</div>';
+  var max=0;lista.forEach(function(x){if(Number(x.valor)>max)max=Number(x.valor);});
+  if(max<=0)max=1;
+  var h='<div class="av-bh">';
+  lista.forEach(function(x){
+    var v=Number(x.valor)||0, w=Math.max(0.6,v/max*100), cor=x.cor||rvCorDe(x.nome);
+    var dica=_gEsc(x.nome)+'<br><b>'+_gVal(v,o)+'</b>'+(x.sub?('<br>'+_gEsc(x.sub)):'');
+    h+='<div class="av-bh-l" onmousemove="rvDica(event,\''+dica.replace(/'/g,'&#39;')+'\')" onmouseleave="rvDicaSair()">'+
+       '<div class="av-bh-n"><span class="av-ponto" style="background:'+cor+'"></span>'+_gEsc(cel?_avNomeCurto(x.nome):x.nome)+'</div>'+
+       '<div class="av-bh-t"><div class="av-bh-b" style="width:'+w.toFixed(1)+'%;background:'+cor+'"></div></div>'+
+       '<div class="av-bh-v">'+(o.unidade?_gVal(v,o):(o.curto?fmtShort(v):brl(v)))+'</div>'+
+       '</div>';
+    if(x.nota)h+='<div class="av-bh-nota">'+x.nota+'</div>';
+  });
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 3) BARRAS EM PÉ: pulso por dia ou por mês ---------- */
+function rvGBarraV(itens,o){
+  o=o||{};
+  var cel=(window.innerWidth||1200)<760;
+  var lista=(itens||[]).slice();
+  // dia de saldo negativo (devolucao maior que a venda) nao vira barra: sai como nota, sem mentir
+  var negs=lista.filter(function(x){return Number(x.valor)<0;});
+  lista=lista.filter(function(x){return Number(x.valor)>0;});
+  var cortou=0;
+  if(cel&&lista.length>7){cortou=lista.length-7;lista=lista.slice(lista.length-7);}
+  if(!lista.length&&!negs.length)return '<div class="av-vazio">'+_gEsc(o.vazio||'Sem dado no período.')+'</div>';
+  var max=0,soma=0;
+  lista.forEach(function(x){var v=Number(x.valor)||0;if(v>max)max=v;soma+=v;});
+  if(max<=0)max=1;
+  var media=lista.length?soma/lista.length:0;
+  var W=cel?330:960, H=cel?150:200, base=H-22, topo=12;
+  var lg=W/Math.max(1,lista.length), bw=Math.min(54,Math.max(8,lg-8));
+  var cor=o.cor||RV_PAL[0];
+  var s='<svg class="av-svg" style="min-width:'+(cel?0:640)+'px" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+_gEsc(o.titulo||'gráfico de barras')+'">';
+  [0,.5,1].forEach(function(f){
+    var y=base-(base-topo)*f;
+    s+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W+'" y2="'+y.toFixed(1)+'" stroke="'+RV_LINHA+'" stroke-width="1"/>';
+  });
+  if(media>0){
+    var ym=base-(base-topo)*(media/max);
+    s+='<line x1="0" y1="'+ym.toFixed(1)+'" x2="'+W+'" y2="'+ym.toFixed(1)+'" stroke="'+RV_SEC+'" stroke-width="1" stroke-dasharray="5 4"/>';
+  }
+  lista.forEach(function(x,i){
+    var v=Number(x.valor)||0, alt=Math.max(3,(base-topo)*(v/max));
+    var xx=i*lg+(lg-bw)/2, yy=base-alt;
+    var dica=_gEsc(x.rot||x.nome)+'<br><b>'+_gVal(v,o)+'</b>'+(x.sub?('<br>'+_gEsc(x.sub)):'');
+    s+='<rect x="'+xx.toFixed(1)+'" y="'+yy.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+alt.toFixed(1)+'" rx="4" ry="4" fill="'+(x.cor||cor)+'"'+
+      ' onmousemove="rvDica(event,\''+dica.replace(/'/g,'&#39;')+'\')" onmouseleave="rvDicaSair()"><title>'+_gEsc(x.rot||'')+': '+_gVal(v,o)+'</title></rect>';
+    if(o.rotulos!==false)
+      s+='<text x="'+(xx+bw/2).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="'+(cel?11:12)+'" fill="'+RV_MUDO+'">'+_gEsc(x.rot||'')+'</text>';
+  });
+  s+='</svg>';
+  var notas='';
+  if(media>0)notas+='<div class="av-nota"><span class="av-tracinho"></span> média dos dias com movimento: <b>'+(o.unidade?_gVal(Math.round(media*10)/10,o):brl(media))+'</b></div>';
+  if(cortou)notas+='<div class="av-nota">Mostrando os 7 últimos dias com movimento. '+cortou+' dia(s) antes ficaram de fora nesta tela pequena — abra no computador para ver o mês inteiro.</div>';
+  negs.forEach(function(x){
+    notas+='<div class="av-nota" style="color:'+RV_COR_RUIM+'">'+_gEsc(x.rot)+' fechou negativo: <b>'+brl(x.valor)+'</b> — devolução maior que a venda do dia.</div>';
+  });
+  return '<div class="av-rolax">'+s+'</div>'+notas;
+}
+
+/* ---------- 4) BARRAS LADO A LADO: vendido x recebido ---------- */
+function rvGDuplas(itens,o){
+  o=o||{};
+  var cel=(window.innerWidth||1200)<760;
+  var lista=(itens||[]).slice();
+  if(cel&&lista.length>3)lista=lista.slice(lista.length-3);
+  if(!lista.length)return '<div class="av-vazio">'+_gEsc(o.vazio||'Sem dado no período.')+'</div>';
+  var max=0;
+  lista.forEach(function(x){var a=Number(x.a)||0,b=Number(x.b)||0;if(a>max)max=a;if(b>max)max=b;});
+  if(max<=0)max=1;
+  var W=cel?330:960, H=cel?160:205, base=H-22, topo=12;
+  var lg=W/lista.length, bw=Math.min(62,Math.max(9,(lg-18)/2));
+  var cA=RV_PAL[0], cB=RV_PAL[1];
+  var s='<svg class="av-svg" style="min-width:'+(cel?0:640)+'px" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+_gEsc(o.titulo||'vendido contra recebido')+'">';
+  [0,.5,1].forEach(function(f){
+    var y=base-(base-topo)*f;
+    s+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W+'" y2="'+y.toFixed(1)+'" stroke="'+RV_LINHA+'" stroke-width="1"/>';
+  });
+  lista.forEach(function(x,i){
+    var a=Number(x.a)||0, b=Number(x.b)||0;
+    var ha=Math.max(a>0?3:0,(base-topo)*(a/max)), hb=Math.max(b>0?3:0,(base-topo)*(b/max));
+    var x0=i*lg+(lg-(bw*2+2))/2;   // 2px de respiro entre as duas barras
+    var d1=_gEsc(x.rot)+'<br>'+_gEsc(o.rotA||'Vendido')+': <b>'+brl(a)+'</b>';
+    var d2=_gEsc(x.rot)+'<br>'+_gEsc(o.rotB||'Recebido')+': <b>'+brl(b)+'</b>';
+    if(a>0)s+='<rect x="'+x0.toFixed(1)+'" y="'+(base-ha).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+ha.toFixed(1)+'" rx="4" ry="4" fill="'+cA+'"'+
+      ' onmousemove="rvDica(event,\''+d1.replace(/'/g,'&#39;')+'\')" onmouseleave="rvDicaSair()"></rect>';
+    if(b>0)s+='<rect x="'+(x0+bw+2).toFixed(1)+'" y="'+(base-hb).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hb.toFixed(1)+'" rx="4" ry="4" fill="'+cB+'"'+
+      ' onmousemove="rvDica(event,\''+d2.replace(/'/g,'&#39;')+'\')" onmouseleave="rvDicaSair()"></rect>';
+    s+='<text x="'+(x0+bw+1).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="'+(cel?11:12)+'" fill="'+RV_MUDO+'">'+_gEsc(x.rot||'')+'</text>';
+  });
+  s+='</svg>';
+  var leg='<div class="av-leg"><span><i style="background:'+cA+'"></i>'+_gEsc(o.rotA||'Vendido')+'</span>'+
+          '<span><i style="background:'+cB+'"></i>'+_gEsc(o.rotB||'Recebido')+'</span></div>';
+  return leg+'<div class="av-rolax">'+s+'</div>';
+}
+
+/* ---------- 5) ANEL: um percentual que vale um número grande ---------- */
+function rvGAnel(o){
+  o=o||{};
+  var temDado=(o.pct!==null&&o.pct!==undefined&&!isNaN(Number(o.pct)));
+  var p=temDado?Math.max(0,Math.min(100,Number(o.pct))):0;
+  var alvo=(o.alvo===undefined||o.alvo===null)?null:Number(o.alvo);
+  var cor=!temDado?RV_MUDO:(alvo===null?RV_PAL[0]:(p>=alvo?RV_COR_OK:(p>=alvo*0.8?RV_COR_AT:RV_COR_RUIM)));
+  var R=34, C=2*Math.PI*R, on=C*p/100;
+  var s='<svg viewBox="0 0 90 90" class="av-anel" role="img" aria-label="'+_gEsc((o.rotulo||'')+': '+(temDado?(Math.round(p)+'%'):'sem dado'))+'">';
+  s+='<circle cx="45" cy="45" r="'+R+'" fill="none" stroke="'+RV_LINHA+'" stroke-width="9"/>';
+  if(temDado&&p>0)
+    s+='<circle cx="45" cy="45" r="'+R+'" fill="none" stroke="'+cor+'" stroke-width="9" stroke-linecap="round"'+
+       ' stroke-dasharray="'+on.toFixed(1)+' '+(C-on).toFixed(1)+'" transform="rotate(-90 45 45)"/>';
+  s+='<text x="45" y="49" text-anchor="middle" font-size="19" font-weight="700" fill="'+(temDado?RV_TINTA:RV_MUDO)+'">'+(temDado?(Math.round(p)+'%'):'—')+'</text>';
+  s+='</svg>';
+  return '<div class="av-anel-c"><div>'+s+'</div><div class="av-anel-t"><div class="av-lbl">'+_gEsc(o.rotulo||'')+'</div>'+
+         '<div class="av-anel-s">'+(o.sub||'')+'</div></div></div>';
+}
+
+
+/* ===================== v58 — PAINEL À VISTA do app de entrega ===================== */
+function renderAVistaEnt(){
+  var el=document.getElementById('entAVista');
+  if(!el)return;
+  if(!me||me.role!=='admin'){el.innerHTML='';return;}
+  var es=S.entregas||[];
+  var fin=es.filter(function(e){return e.finalizada;});
+  var ok=es.filter(function(e){return e.status==='entregue';}).length;
+  var oc=es.filter(function(e){return e.status==='ocorrencia';}).length;
+  var pend=es.filter(function(e){return e.status==='agendado'||e.status==='em_rota';}).length;
+  var R=rvEntregaPct();
+
+  /* 1) os dois números que mandam */
+  var h='<div class="av-grade2">';
+  h+='<div class="av-card">'+rvGAnel({pct:R.mes.total>0?R.mes.pct:null,alvo:90,rotulo:'Entregues no mês',
+      sub:(R.mes.total>0?(R.mes.entregues+' de '+R.mes.total+' saíram e chegaram'+(pend?('<br><span class="av-mudo">'+pend+' ainda a entregar</span>'):'')):
+        'nenhuma entrega cadastrada neste mês')})+'</div>';
+  var semFoto=fin.filter(function(e){return !e.fotoEnviada&&!ehRetirada(e);}).length;
+  var pctFoto=fin.length?Math.round((fin.length-semFoto)/fin.length*100):null;
+  h+='<div class="av-card">'+rvGAnel({pct:pctFoto,alvo:100,rotulo:'Foto no grupo',
+      sub:(pctFoto===null?'nenhuma entrega finalizada ainda neste mês':
+        ((fin.length-semFoto)+' de '+fin.length+' finalizadas com foto'+(semFoto?('<br><span class="av-mudo">'+semFoto+' sem foto — a regra da loja não deixa fechar sem</span>'):'')))})+'</div>';
+  h+='</div>';
+
+  /* 2) entregas por dia */
+  var mapa={};
+  fin.forEach(function(e){
+    var d=e.dataEntrega||normDia(new Date(e.horaChegada||e.criadoEm).toISOString());
+    if(!d)return;
+    mapa[d]=(mapa[d]||0)+1;
+  });
+  var dias=Object.keys(mapa).sort().map(function(d){
+    return {rot:d.slice(8,10)+'/'+d.slice(5,7),valor:mapa[d],sub:mapa[d]+' entrega(s)'};
+  });
+  h+='<div class="av-card"><div class="av-tit">Entregas por dia</div>'+
+     '<div class="av-sub2">Quantas viagens foram finalizadas em cada dia. A linha tracejada é a média.</div>'+
+     rvGBarraV(dias,{titulo:'entregas por dia',vazio:'Nenhuma entrega finalizada neste mês ainda.',unidade:'entregas',unidade1:'entrega'})+'</div>';
+
+  /* 3) por motorista: volume e taxa sem ocorrência */
+  var mp={};
+  es.forEach(function(e){
+    var n=e.motoristaNome||'—';
+    if(!mp[n])mp[n]={total:0,ok:0,oc:0};
+    mp[n].total++;
+    if(e.status==='entregue')mp[n].ok++;
+    if(e.status==='ocorrencia')mp[n].oc++;
+  });
+  var nomes=Object.keys(mp);
+  rvCorFixar(nomes);
+  var itens=nomes.map(function(n){
+    var d=mp[n], tx=d.total>0?Math.round(d.ok/d.total*100):null;
+    return {nome:n,valor:d.ok,
+      sub:d.total+' viagem(ns) · '+(tx===null?'sem taxa':(tx+'% sem ocorrência'))+(d.oc?(' · '+d.oc+' com problema'):''),
+      nota:(d.oc>0?('<span class="av-falta">'+d.oc+' entrega(s) com ocorrência</span>'):'')};
+  }).sort(function(a,b){return b.valor-a.valor;});
+  h+='<div class="av-card"><div class="av-tit">Quem está entregando</div>'+
+     '<div class="av-sub2">Entregas concluídas por motorista. Passe o dedo para ver a taxa de cada um.</div>'+
+     rvGBarraH(itens,{vazio:'Nenhuma entrega registrada neste mês.',curto:true,unidade:'entregas',unidade1:'entrega'})+'</div>';
+
+  /* 4) por que deu problema */
+  var ocm={};
+  es.filter(function(e){return e.ocorrencia&&temProblema(e);}).forEach(function(e){
+    var ns=(e.ocorrencia.naturezas||[]);
+    if(!ns.length)ns=[e.ocorrencia.resultado||'Outro'];
+    ns.forEach(function(t){ocm[t]=(ocm[t]||0)+1;});
+  });
+  var ks=Object.keys(ocm);
+  rvCorFixar(ks);
+  var ocl=ks.map(function(k){return {nome:k,valor:ocm[k],sub:ocm[k]+' ocorrência(s)'};})
+            .sort(function(a,b){return b.valor-a.valor;});
+  h+='<div class="av-card"><div class="av-tit">Por que deu problema</div>'+
+     '<div class="av-sub2">Cada ocorrência custa frete, produto e cliente. O motivo mais alto é por onde começar.</div>'+
+     rvGBarraH(ocl,{vazio:'Nenhuma ocorrência neste mês — mês limpo.',curto:true,unidade:'ocorrências',unidade1:'ocorrência'})+'</div>';
+
+  el.innerHTML=h;
+}
+
 
 </script>
 </body>
