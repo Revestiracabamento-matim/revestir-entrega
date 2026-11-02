@@ -2877,6 +2877,120 @@ function rvGDias(itens,o){
 //   Tempo de rota — hora de saida ate a chegada (ja gravadas como relogio).
 //   Km por entrega e custo por entrega — kmSaida/kmChegada e os abastecimentos.
 //   Retrabalho — viagem que existiu so porque algo deu errado antes.
+// ===== v61: O QUE EU TINHA DITO QUE NAO DAVA — E DA =====
+// Tres correcoes, todas erro meu de investigacao, nao limite do sistema:
+//  1. A venda CHEGA no app de entrega (_all.vendasEntrega, usada para preencher o
+//     cadastro pela O.S.) e traz a data. Entao da para medir o prazo que o cliente sente:
+//     da venda ate a entrega. E o "order-to-delivery" do setor.
+//  2. Os ajudantes SAO registrados — em ext.equipe, dentro do campo "produtos".
+//     O nome do campo me enganou; o dado estava la desde sempre.
+//  3. Entrega na primeira tentativa da para medir: ext.seq diz a viagem e
+//     ext.proximaGerada/origemId amarram a reentrega na viagem que a causou.
+
+/* a venda que originou a entrega: a O.S. da entrega vem como V51087/01 */
+function _vendaDaEntrega(e){
+  if(!e||!e.os)return null;
+  var base=String(e.os).replace(/\/\d+$/,'').trim().toUpperCase();
+  if(!base)return null;
+  var lista=(typeof _all!=='undefined'&&_all&&_all.vendasEntrega)?_all.vendasEntrega:[];
+  for(var i=0;i<lista.length;i++){
+    var v=lista[i];if(!v)continue;
+    var vo=String(v.os||v.OS||v.orc||'').replace(/\/\d+$/,'').trim().toUpperCase();
+    if(vo&&vo===base)return v;
+  }
+  return null;
+}
+function _dataVenda(v){
+  if(!v)return '';
+  var d=v.data||v.Data||v.dataVenda||'';
+  if(!d)return '';
+  var s=String(d).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+  var m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1];
+  var n=Number(s);
+  if(isFinite(n)&&n>1000000000)return new Date(n).toISOString().slice(0,10);
+  return '';
+}
+/* prazo da venda ate a entrega — o unico prazo que o cliente percebe */
+function entPrazoCliente(es){
+  var r={medidas:0,totalDias:0,semVenda:0,faixas:{ate3:0,ate7:0,ate15:0,mais:0},pior:null,lista:[]};
+  (es||[]).forEach(function(e){
+    if(!_entFin(e))return;
+    var fe=_entDia(e);
+    if(!fe)return;
+    var v=_vendaDaEntrega(e), dv=_dataVenda(v);
+    if(!dv){r.semVenda++;return;}
+    var d=Math.round((new Date(fe)-new Date(dv))/86400000);
+    if(d<0||d>365)return;                 // data torta nao entra na media
+    r.medidas++;r.totalDias+=d;
+    if(d<=3)r.faixas.ate3++;
+    else if(d<=7)r.faixas.ate7++;
+    else if(d<=15)r.faixas.ate15++;
+    else r.faixas.mais++;
+    if(!r.pior||d>r.pior.dias)r.pior={dias:d,cliente:e.cliente||'',os:e.os||''};
+  });
+  r.media=r.medidas?Math.round(r.totalDias/r.medidas*10)/10:null;
+  return r;
+}
+/* entrega resolvida na primeira ida — sem reentrega e sem pendencia em aberto */
+function entPrimeiraTentativa(es){
+  var r={base:0,ok:0,reentregas:0,pendAberta:0};
+  (es||[]).forEach(function(e){
+    if(!_entFin(e))return;
+    var x=extDe(e);
+    if(x.seq>1){r.reentregas++;return;}   // ela propria JA e a segunda ida
+    r.base++;
+    var gerouOutra=!!x.proximaGerada;
+    var pend=!!(x.pendencia&&x.pendencia.aberta);
+    if(pend)r.pendAberta++;
+    if(!gerouOutra&&!pend&&!temProblema(e))r.ok++;
+  });
+  r.pct=r.base?Math.round(r.ok/r.base*100):null;
+  return r;
+}
+/* quem foi junto na viagem (ext.equipe) */
+function entPorAjudante(es){
+  var m={};
+  (es||[]).forEach(function(e){
+    if(!e)return;
+    var x=extDe(e);
+    (x.equipe||[]).forEach(function(n){
+      var k=String(n||'').trim();
+      if(!k)return;
+      if(!m[k])m[k]={nome:k,total:0,fin:0,oc:0};
+      m[k].total++;
+      if(_entFin(e))m[k].fin++;
+      if(temProblema(e))m[k].oc++;
+    });
+  });
+  return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.fin-a.fin;});
+}
+/* de quem foi a pendencia, quando o admin ja confirmou */
+function entPorCulpa(es){
+  var m={};
+  (es||[]).forEach(function(e){
+    if(!e)return;
+    var x=extDe(e);
+    var c=x.respAdmin||'';
+    if(!c)return;
+    var rot=(typeof RESP_LABELS!=='undefined'&&RESP_LABELS[c])?RESP_LABELS[c]:c;
+    m[rot]=(m[rot]||0)+1;
+  });
+  return Object.keys(m).map(function(k){return {nome:k,valor:m[k]};}).sort(function(a,b){return b.valor-a.valor;});
+}
+/* custo real anotado na viagem, quando existe */
+function entCustoViagem(es){
+  var r={n:0,total:0};
+  (es||[]).forEach(function(e){
+    if(!e)return;
+    var c=Number(extDe(e).custoViagem)||0;
+    if(c>0){r.n++;r.total+=c;}
+  });
+  r.media=r.n?(r.total/r.n):null;
+  return r;
+}
+
 function _entFin(e){return !!(e&&(e.finalizada||e.status==='entregue'||e.status==='ocorrencia'||e.status==='devolvido'));}
 function _entDia(e){
   var d=normDia(e&&e.dataEntrega);
@@ -3047,6 +3161,29 @@ function renderAVistaEnt(){
         ((fin.length-semFoto)+' de '+fin.length+' finalizadas com foto'+(semFoto?('<br><span class="av-mudo">'+semFoto+' sem foto — a regra da loja não deixa fechar sem</span>'):'')))})+'</div>';
   h+='</div>';
 
+  /* 1b) o prazo que o cliente sente: da venda ate a entrega (v61) */
+  var pc=entPrazoCliente(es), p1=entPrimeiraTentativa(es), cv=entCustoViagem(es);
+  h+='<div class="av-card"><div class="av-tit">Da venda até a entrega</div>'+
+     '<div class="av-sub2">O único prazo que o cliente percebe: ele comprou num dia e recebeu em outro. A data da venda vem do painel de vendas, pela O.S.</div>';
+  if(pc.medidas){
+    h+='<div class="ent-fichas">'+
+       '<div class="ent-ficha"><div class="ent-ficha-l">Tempo médio</div><div class="ent-ficha-v">'+_pl(pc.media,'dia','dias')+'</div><div class="ent-ficha-s">'+_pl(pc.medidas,'entrega medida','entregas medidas')+'</div></div>'+
+       '<div class="ent-ficha"><div class="ent-ficha-l">Resolvida na 1ª ida</div><div class="ent-ficha-v">'+(p1.pct===null?'—':(p1.pct+'%'))+'</div><div class="ent-ficha-s">'+(p1.base?(p1.ok+' de '+p1.base+' sem voltar lá'):'sem base para medir')+'</div></div>'+
+       '</div>';
+    h+=rvGBarraH([{nome:'Até 3 dias',valor:pc.faixas.ate3,cor:RV_COR_OK},
+                  {nome:'4 a 7 dias',valor:pc.faixas.ate7,cor:RV_PAL[0]},
+                  {nome:'8 a 15 dias',valor:pc.faixas.ate15,cor:RV_COR_AT},
+                  {nome:'Mais de 15 dias',valor:pc.faixas.mais,cor:RV_COR_RUIM}],
+                 {curto:true,unidade:'entregas',unidade1:'entrega',vazio:'Sem dado.'});
+    if(pc.pior)h+='<div class="av-nota">A que mais demorou: <b>'+_pl(pc.pior.dias,'dia','dias')+'</b> — '+_gEsc(pc.pior.cliente)+(pc.pior.os?(' (O.S. '+_gEsc(pc.pior.os)+')'):'')+'.</div>';
+    if(pc.semVenda)h+='<div class="av-nota">'+_pl(pc.semVenda,'entrega','entregas')+' sem venda correspondente no painel — a O.S. não foi encontrada.</div>';
+    if(p1.reentregas)h+='<div class="av-nota">'+_pl(p1.reentregas,'viagem foi reentrega','viagens foram reentrega')+' no mês — segunda ida ao mesmo cliente.</div>';
+  }else{
+    h+='<div class="av-vazio">Ainda não dá para medir: nenhuma entrega finalizada tem a O.S. casando com uma venda do painel.'+
+       (pc.semVenda?(' '+_pl(pc.semVenda,'entrega ficou','entregas ficaram')+' sem venda encontrada.'):'')+'</div>';
+  }
+  h+='</div>';
+
   /* 2) pulso: todos os dias do mes */
   h+='<div class="av-card"><div class="av-tit">O pulso das entregas</div>'+
      '<div class="av-sub2">Quantas viagens foram finalizadas em <b>cada dia</b> do mês. Dia sem entrega aparece como risco na base; domingo fica sombreado porque a loja não abre.</div>'+
@@ -3104,6 +3241,7 @@ function renderAVistaEnt(){
   fichas.push(['Custo por entrega',cb.porEntrega===null?'—':brl(cb.porEntrega),cb.entregas?('combustível do mês '+brl(cb.valor)+' ÷ '+_pl(cb.entregas,'entrega','entregas')):'sem abastecimento lançado']);
   fichas.push(['Preço do litro',cb.rsLitro===null?'—':brl(cb.rsLitro),cb.n?(_pl(cb.n,'abastecimento no mês','abastecimentos no mês')):'sem abastecimento lançado']);
   fichas.push(['Consumo',cb.kmL===null?'—':(_dec(cb.kmL,1)+' km/l'),'só vale se o km das viagens estiver sendo anotado']);
+  if(cv.n)fichas.push(['Custo anotado na viagem',brl(cv.media),_pl(cv.n,'viagem com custo lançado','viagens com custo lançado')+' · total '+brl(cv.total)]);
   h+='<div class="av-card"><div class="av-tit">Rota, quilometragem e custo</div>'+
      '<div class="av-sub2">O que cada entrega custa de verdade em tempo e em combustível. Campo em branco quer dizer que o dado não está sendo anotado na operação.</div>'+
      '<div class="ent-fichas">'+fichas.map(function(f){
@@ -3129,6 +3267,27 @@ function renderAVistaEnt(){
          rvGBarraH(bairros,{curto:true,unidade:'entregas',unidade1:'entrega',vazio:'Sem bairro preenchido.'});
     }
     h+='</div>';
+  }
+
+  /* 6b) quem foi junto na viagem (v61: estava em ext.equipe o tempo todo) */
+  var aj=entPorAjudante(es);
+  if(aj.length){
+    rvCorFixar(aj.map(function(x){return x.nome;}));
+    h+='<div class="av-card"><div class="av-tit">Quem foi junto</div>'+
+       '<div class="av-sub2">Ajudantes que participaram das viagens do mês. Serve para dividir carga e reconhecer quem está na rua.</div>'+
+       rvGBarraH(aj.map(function(x){
+         return {nome:x.nome,valor:x.fin,
+           sub:_pl(x.total,'viagem','viagens')+(x.oc?(' · '+_pl(x.oc,'com ocorrência','com ocorrência')):' · nenhuma com ocorrência')};
+       }),{curto:true,unidade:'entregas',unidade1:'entrega',vazio:'Nenhum ajudante registrado nas viagens.'})+'</div>';
+  }
+
+  /* 6c) de quem foi a pendencia, quando o admin confirmou */
+  var culpa=entPorCulpa(es);
+  if(culpa.length){
+    rvCorFixar(culpa.map(function(x){return x.nome;}));
+    h+='<div class="av-card"><div class="av-tit">De onde veio a pendência</div>'+
+       '<div class="av-sub2">Só o que você já confirmou. A entrega costuma pagar a conta de um erro que nasceu antes dela.</div>'+
+       rvGBarraH(culpa,{curto:true,unidade:'pendências',unidade1:'pendência',vazio:'Nenhuma pendência com origem confirmada.'})+'</div>';
   }
 
   /* 7) por que deu problema + retrabalho */
@@ -3167,7 +3326,11 @@ function renderAVistaMoto(){
     if(!e)return false;
     if(normStrEnt(e.motoristaNome)===n)return true;
     var mi=normStrEnt(e.motoristaId);
-    return !!mi&&(mi===n||(!!id&&mi===id));
+    if(!!mi&&(mi===n||(!!id&&mi===id)))return true;
+    // v61: o ajudante tambem tem o mes dele — ele vai na viagem e estava invisivel aqui
+    var eq=extDe(e).equipe||[];
+    for(var k=0;k<eq.length;k++){if(normStrEnt(eq[k])===n)return true;}
+    return false;
   });
   if(!meus.length){
     el.innerHTML='<div class="av-card"><div class="av-tit">Meu mês</div>'+
@@ -3201,6 +3364,12 @@ function renderAVistaMoto(){
       sub:(pf.pct===null?'ainda não dá para medir':
         (pf.ok+' de '+pf.base+' no prazo, sem ocorrência e com foto'))})+'</div>';
 
+  var pcM=entPrazoCliente(meus);
+  if(pcM.medidas){
+    h+='<div class="av-card"><div class="av-tit">Da venda até a sua entrega</div>'+
+       '<div class="av-sub2">Quanto tempo o cliente esperou, da compra até você chegar. Boa parte disso não depende de você — mas é o que ele sente.</div>'+
+       '<div class="ent-fichas"><div class="ent-ficha"><div class="ent-ficha-l">Tempo médio</div><div class="ent-ficha-v">'+_pl(pcM.media,'dia','dias')+'</div><div class="ent-ficha-s">'+_pl(pcM.medidas,'entrega medida','entregas medidas')+'</div></div></div></div>';
+  }
   h+='<div class="av-card"><div class="av-tit">Meus dias</div>'+
      '<div class="av-sub2">Quantas entregas você fechou em cada dia do mês. Domingo fica sombreado.</div>'+
      rvGDias(entPorDiaMes(meus),{titulo:'minhas entregas por dia',hoje:_avHojeDoMes(curMonth),
