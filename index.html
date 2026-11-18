@@ -1064,9 +1064,13 @@ function changeMonth(){curMonth=document.getElementById('monthSel').value;loadDa
 
 // ========== UTILS ==========
 function brl(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function fmtDate(ts){return new Date(ts).toLocaleDateString('pt-BR');}
+function fmtDate(ts){if(ts===''||ts===null||ts===undefined)return '—';if(typeof ts==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(ts))return diaBR(ts);var n=(typeof ts==='string'&&/^\d+$/.test(ts))?Number(ts):ts;var d=new Date(n);return isNaN(d.getTime())?'—':d.toLocaleDateString('pt-BR');}
 function fmtDT(ts){return new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function uid(){return Date.now()+Math.floor(Math.random()*9999);}
+// v63: a nota sai como V52300/01 e a venda fica como V52300 — comparar sempre pela venda (sem a barra)
+function osBaseEnt(s){return String(s||'').replace(/\/\d+$/,'').trim().toUpperCase();}
+// v63: data do formulario (aaaa-mm-dd) vira meio-dia no horario do Brasil — Date.parse gravava meia-noite UTC e caia no dia anterior
+function tsDoDia(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0).getTime():Date.parse(s);}
 function entById(id){return S.entregas.find(function(x){return String(x.id)===String(id);});}
 // Dia (aaaa-mm-dd) a partir de qualquer formato que a planilha devolva (ISO com hora, Date, texto)
 function normDia(v){if(!v)return '';var t=String(v);if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;var d=new Date(t);if(isNaN(d.getTime()))return t;var m=d.getMonth()+1,dd=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd;}
@@ -1207,12 +1211,12 @@ function buscarVendaPorOS(){
   if(!os){box.innerHTML='<div class="alert alert-orange">Digite o código da venda (ex: V50633)</div>';return;}
 
   // 1. Busca nas entregas já existentes (evita duplicar)
-  var dup=S.entregas.find(function(e){return String(e.os).toUpperCase()===os;});
+  var dup=S.entregas.find(function(e){return osBaseEnt(e.os)===osBaseEnt(os);});
   if(dup){box.innerHTML='<div class="alert alert-orange">⚠️ Já existe uma entrega cadastrada para esta O.S. ('+esc(dup.cliente)+'). Verifique na aba Entregas.</div>';return;}
 
   // 2. Busca nas vendas importadas do dashboard (_all.vendasEntrega)
   var venda=(_all.vendasEntrega||[]).find(function(v){
-    return String(v.os||v.OS||v.orc||'').toUpperCase()===os||String(v.id||'').toUpperCase()===os;
+    return osBaseEnt(v.os||v.OS||v.orc||'')===osBaseEnt(os)||String(v.id||'').toUpperCase()===os;
   });
 
   if(venda){
@@ -1266,10 +1270,10 @@ function buscarVendaMoto(){
   var os=document.getElementById('mNOS').value.trim().toUpperCase();
   var box=document.getElementById('mNResultado');
   if(!os){box.innerHTML='<div class="alert alert-orange">Digite o código da venda primeiro (ex: V50633)</div>';return;}
-  var dup=S.entregas.find(function(e){return String(e.os).toUpperCase()===os;});
+  var dup=S.entregas.find(function(e){return osBaseEnt(e.os)===osBaseEnt(os);});
   if(dup){box.innerHTML='<div class="alert alert-orange">⚠️ Já existe entrega para esta O.S. ('+esc(dup.cliente)+'). Veja em Minhas Entregas.</div>';return;}
   var venda=(_all.vendasEntrega||[]).find(function(v){
-    return String(v.os||v.OS||v.orc||'').toUpperCase()===os||String(v.id||'').toUpperCase()===os;
+    return osBaseEnt(v.os||v.OS||v.orc||'')===osBaseEnt(os)||String(v.id||'').toUpperCase()===os;
   });
   if(venda){
     var nome=venda.cliente||venda.nome||venda.Cliente||'';
@@ -1515,7 +1519,7 @@ function salvarAbast(){
   if(!km){alert('Informe o KM do odômetro (obrigatório)');return;}
   if(!meio){alert('Selecione o meio de pagamento (obrigatório)');return;}
   var vc=(_glob.veiculos||[]).find(function(v){return String(v.id)===String(vid);});
-  S.abastecimentos.push({id:uid(),data:Date.parse(data),tipo:tipo,km:parseFloat(km)||null,litros:parseFloat(lit),valor:parseFloat(val),posto:posto,meioPgt:meio,veiculo:(vc?vc.nome:''),placa:(vc?vc.placa:''),motoristaId:(me?me.name:''),motoristaNome:(me?me.name:'')});
+  S.abastecimentos.push({id:uid(),data:tsDoDia(data),tipo:tipo,km:parseFloat(km)||null,litros:parseFloat(lit),valor:parseFloat(val),posto:posto,meioPgt:meio,veiculo:(vc?vc.nome:''),placa:(vc?vc.placa:''),motoristaId:(me?me.name:''),motoristaNome:(me?me.name:'')});
   save();
   ['abKm','abLitros','abValor','abPosto'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var mp=document.getElementById('abMeioPgt');if(mp)mp.value='';
@@ -1534,7 +1538,7 @@ function salvarAbastMoto(){
   if(!data||!lit||!val){alert('Preencha data, litros e valor');return;}
   if(!km){alert('Informe o KM do odômetro (obrigatório)');return;}
   if(!meio){alert('Selecione o meio de pagamento (obrigatório)');return;}
-  S.abastecimentos.push({id:uid(),data:Date.parse(data),tipo:tipo,km:parseFloat(km)||null,litros:parseFloat(lit),valor:parseFloat(val),posto:posto,meioPgt:meio,motoristaId:me.id,motoristaNome:me.name});
+  S.abastecimentos.push({id:uid(),data:tsDoDia(data),tipo:tipo,km:parseFloat(km)||null,litros:parseFloat(lit),valor:parseFloat(val),posto:posto,meioPgt:meio,motoristaId:me.id,motoristaNome:me.name});
   save();
   ['mAbData','mAbKm','mAbLitros','mAbValor','mAbPosto'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var mp=document.getElementById('mAbMeioPgt');if(mp)mp.value='';
@@ -2164,6 +2168,8 @@ function confirmarEnt(){
   e.fotoEnviada=_fotoSel;
   if(!retirada&&EXIGIR_ASSINATURA){var c=document.getElementById('sigCanvas');e.assinatura=c?c.toDataURL():null;}
   e.dataEntrega=hojeISO();
+  // v63: entrega que ficou de um mes para o outro conta no mes em que foi FEITA (senao sumia do mes atual)
+  var _mh=_mesPadrao();if(mesIdx(_mh)<999&&mesIdx(_mh)>mesIdx(e.mes||curMonth))e.mes=_mh;
   e.finalizada=true;
   e.status=temProblema(e)?'ocorrencia':'entregue';
   var xf=extDe(e);
@@ -2300,11 +2306,11 @@ function rvEntregaDaOS(os){
   var todas=(_all&&_all.entregas)?_all.entregas:[];
   for(var i=0;i<todas.length;i++){
     if(String(todas[i].id)===CFG_ID)continue;
-    if(String(todas[i].os||'').trim().toUpperCase()===alvo){achou=todas[i];break;}
+    if(osBaseEnt(todas[i].os)===osBaseEnt(alvo)){achou=todas[i];break;}
   }
   if(!achou){
     for(var j=0;j<(S.entregas||[]).length;j++){
-      if(String(S.entregas[j].os||'').trim().toUpperCase()===alvo){achou=S.entregas[j];break;}
+      if(osBaseEnt(S.entregas[j].os)===osBaseEnt(alvo)){achou=S.entregas[j];break;}
     }
   }
   return achou;
@@ -3157,9 +3163,9 @@ function renderAVistaEnt(){
   h+='<div class="av-card">'+rvGAnel({pct:pf.pct,alvo:90,rotulo:'Entrega perfeita',
       sub:(pf.pct===null?'ainda não dá para medir neste mês':
         (pf.ok+' de '+pf.base+' saíram no prazo, sem ocorrência e com foto'+
-         ((pf.base-pf.ok)?('<br><span class="av-mudo">das que falharam: '+pf.semPrazo+' no prazo · '+pf.comOcorr+' com ocorrência · '+pf.semFoto+' sem foto</span>'):'')))})+'</div>';
+         ((pf.base-pf.ok)?('<br><span class="av-mudo">das que falharam: '+pf.semPrazo+' fora do prazo · '+pf.comOcorr+' com ocorrência · '+pf.semFoto+' sem foto</span>'):'')))})+'</div>';
   h+='<div class="av-card">'+rvGAnel({pct:R.mes.total>0?R.mes.pct:null,alvo:90,rotulo:'Entregues no mês',
-      sub:(R.mes.total>0?(R.mes.entregues+' de '+R.mes.total+' saíram e chegaram'+(pend?('<br><span class="av-mudo">'+pend+' ainda a entregar</span>'):'')):
+      sub:(R.mes.total>0?(R.mes.feitas+' de '+R.mes.total+' finalizadas'+(R.mes.ocorr?(' ('+_pl(R.mes.ocorr,'com ocorrência','com ocorrência')+')'):'')+(pend?('<br><span class="av-mudo">'+pend+' ainda a entregar</span>'):'')):
         'nenhuma entrega cadastrada neste mês')})+'</div>';
   h+='<div class="av-card">'+rvGAnel({pct:pctFoto,alvo:100,rotulo:'Foto no grupo',
       sub:(pctFoto===null?'nenhuma entrega finalizada ainda neste mês':
@@ -3210,8 +3216,9 @@ function renderAVistaEnt(){
   var mp={};
   es.forEach(function(e){
     var n=e.motoristaNome||'—';
-    if(!mp[n])mp[n]={total:0,ok:0,oc:0,prazoBase:0,prazoOk:0,rotaN:0,rotaMin:0};
+    if(!mp[n])mp[n]={total:0,fin:0,ok:0,oc:0,prazoBase:0,prazoOk:0,rotaN:0,rotaMin:0};
     mp[n].total++;
+    if(_entFin(e))mp[n].fin++;
     if(e.status==='entregue')mp[n].ok++;
     if(e.status==='ocorrencia')mp[n].oc++;
     if(_entFin(e)){
@@ -3227,11 +3234,11 @@ function renderAVistaEnt(){
   rvCorFixar(nomes);
   var itens=nomes.map(function(n){
     var d=mp[n];
-    var tx=d.total>0?Math.round(d.ok/d.total*100):null;
+    var tx=d.fin>0?Math.round(d.ok/d.fin*100):null;
     var pp=d.prazoBase?Math.round(d.prazoOk/d.prazoBase*100):null;
     var md=d.rotaN?Math.round(d.rotaMin/d.rotaN):null;
-    return {nome:n,valor:d.ok,
-      sub:_pl(d.total,'viagem','viagens')+(pp===null?'':(' · '+pp+'% no prazo'))+(tx===null?'':(' · '+tx+'% sem ocorrência'))+(md===null?'':(' · rota média '+_hm(md))),
+    return {nome:n,valor:d.fin,
+      sub:[(d.total-d.fin)?((d.total-d.fin)+' a fazer'):'',(pp===null?'':(pp+'% no prazo')),(tx===null?'':(tx+'% sem ocorrência')),(md===null?'':('rota média '+_hm(md)))].filter(function(x){return !!x;}).join(' · '),
       nota:(d.oc>0?('<span class="av-falta">'+_pl(d.oc,'entrega com ocorrência','entregas com ocorrência')+'</span>'):'')};
   }).sort(function(a,b){return b.valor-a.valor;});
   h+='<div class="av-card"><div class="av-tit">Quem está entregando</div>'+
@@ -3400,6 +3407,6 @@ function renderAVistaMoto(){
 
 
 </script>
-<div class="rv-selo">ENTREGA v62</div>
+<div class="rv-selo">ENTREGA v63</div>
 </body>
 </html>
