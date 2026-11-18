@@ -1028,7 +1028,9 @@ function baixarTudo(cb){
       var d=res.dados||{},g=res.global||{};
       _all.entregas=d.entregas||[];
       _all.abastecimento=d.abastecimento||[];
-      _all.vendasEntrega=d.vendasEntrega||[];
+      // v64: a porta real nao manda 'vendasEntrega' — as vendas vem em 'vendido' (vendas realizadas, com a data da venda)
+      // e em 'vendas' (comissao). Sem isso a busca pela O.S. e o prazo 'da venda ate a entrega' ficavam sempre vazios.
+      _all.vendasEntrega=(d.vendasEntrega&&d.vendasEntrega.length)?d.vendasEntrega:[].concat(d.vendido||[],d.vendas||[]);
       lerConfigNuvem();
       _glob.cidades=g.cidades||[];
       _glob.veiculos=g.veiculos||[];
@@ -3407,6 +3409,6 @@ function renderAVistaMoto(){
 
 
 </script>
-<div class="rv-selo">ENTREGA v63</div>
+<div class="rv-selo">ENTREGA v64</div>
 </body>
 </html>
