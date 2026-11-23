@@ -1402,6 +1402,7 @@ function openModalEnt(id){
       '</div>';
   }
   h+=_secConfRecebModal(e);
+  h+=_secFotosModal(e);
   if(me&&me.role==='admin'&&e.finalizada)h+=_secReclamacao(e);
   h+='<div class="sep"></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
@@ -1880,6 +1881,7 @@ function openExec(id){
   _fotoSel=!!(e.fotoEnviada);
   // v65: a conferencia e da viagem — comeca zerada a cada saida
   _confQuem='';_confSep='';_confItens=false;_confFoto=false;_kmSaidaTmp='';_recebNome='';_recConf=false;
+  _fotos={};_leit=null; // v66
   if(e.status==='agendado')preSelecionarEquipe(e);
   document.getElementById('finTitulo').textContent=esc(e.cliente);
   renderExecStep(e);
@@ -1999,7 +2001,8 @@ function renderFinalizacao(e){
     '<textarea id="finDesc" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;resize:none;height:80px" placeholder="Ex: piso 57500 quebrou 02 caixas...">'+esc(desc)+'</textarea>'+
     '</div>'+
     // FOTO
-    '<div class="fin-section" style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px">'+
+    (FOTOS_URL?_secFotosEntrega():'')+
+    '<div class="fin-section" style="'+(FOTOS_URL?'display:none;':'')+'background:white;border:1px solid var(--border);border-radius:12px;padding:14px">'+
     '<div id="btnFoto" onclick="toggleFoto()" style="display:flex;align-items:center;gap:12px;cursor:pointer">'+
     '<div id="icoFoto" style="font-size:28px">'+(foto?'✅':'⬜')+'</div>'+
     '<div><div style="font-weight:600;font-size:14px">Foto enviada no grupo <span style="color:var(--danger)">*</span></div>'+
@@ -2135,11 +2138,24 @@ function iniciarEnt(){
   var _cq=String(_confQuem||'').trim();
   if(!_cq){alert('Quem conferiu a carga? Escolha a pessoa da loja que conferiu os produtos com a nota.');return;}
   if(me&&normStr(_cq)===normStr(me.name)){alert('A conferência tem que ser feita por OUTRA pessoa da loja, não por quem vai entregar.');return;}
-  if(!_confItens){alert('Marque "Conferido item a item com a nota". Sem conferência a carga não sai.');return;}
-  if(!_confFoto){alert('Mande a foto da carga conferida no grupo e marque "Foto da carga no grupo".');return;}
+  if(FOTOS_URL){
+    // v66: foto da nota e da carga, e a lista lida da nota conferida item a item
+    if(!_fotos.nota){alert('Fotografe a nota (de preferência a via sem preço) antes de sair.');return;}
+    if(!_fotos.carga){alert('Fotografe a carga montada antes de sair.');return;}
+    if(_leit&&_leit.lendo){alert('Espere a leitura da nota terminar (alguns segundos).');return;}
+    if(_leit&&_leit.lida&&_leit.pedido&&e.os&&osBaseEnt(_leit.pedido)!==osBaseEnt(e.os)){alert('A nota fotografada é do pedido '+_leit.pedido+', mas esta entrega é da O.S. '+e.os+'. Fotografe a nota certa desta entrega.');return;}
+    if(_leit&&_leit.lida&&_leit.itens.length){
+      var _falta=_leit.itens.filter(function(i){return !i.ok;}).length;
+      if(_falta){alert('Confira cada produto na carga e toque nele para marcar ('+_falta+' sem marcar).');return;}
+    } else if(!_confItens){alert('Não deu para ler a nota pela foto. Confira pelo papel e marque "Conferido item a item com a nota".');return;}
+  } else {
+    if(!_confItens){alert('Marque "Conferido item a item com a nota". Sem conferência a carga não sai.');return;}
+    if(!_confFoto){alert('Mande a foto da carga conferida no grupo e marque "Foto da carga no grupo".');return;}
+  }
   var _ks=kmEl&&kmEl.value?parseInt(kmEl.value,10):NaN;
   if(!isFinite(_ks)||_ks<=0){alert('Informe o KM do veículo agora (o número do painel do caminhão).');return;}
   extDe(e).conf={quem:_cq,sep:String(_confSep||'').trim(),itens:true,foto:true,em:Date.now()};
+  if(FOTOS_URL){var _cf=extDe(e).conf;_cf.porFoto=!!(_leit&&_leit.lida&&_leit.itens.length);if(_leit&&_leit.lida)_cf.leitura={pedido:_leit.pedido||'',itens:_leit.itens.map(function(i){return {qtd:i.qtd,desc:i.desc,cod:i.cod||''};})};}
   e.status='em_rota';
   e.kmSaida=_ks;
   e.horaSaida=Date.now();
@@ -2185,7 +2201,8 @@ function confirmarEnt(){
   if(usaItens&&itensRestantes.some(function(i){return !i.motivo||!i.responsavel;})){alert('Em cada item marcado, escolha o que houve e de quem foi a responsabilidade.');return;}
   if(!retirada&&EXIGIR_ASSINATURA&&!hasSig()){alert('Coloque a assinatura do cliente para finalizar.');return;}
   // v35: foto no grupo e regra da loja — sem ela a entrega nao fecha.
-  if(!retirada&&!_fotoSel){alert('Mande a foto do produto entregue no grupo e marque o quadradinho "Foto enviada no grupo". Sem isso a entrega não pode ser finalizada.');return;}
+  if(!retirada&&!_fotoSel){alert(FOTOS_URL?'Fotografe os produtos entregues. Sem foto a entrega não pode ser finalizada.':'Mande a foto do produto entregue no grupo e marque o quadradinho "Foto enviada no grupo". Sem isso a entrega não pode ser finalizada.');return;}
+  if(!retirada&&FOTOS_URL&&!_fotos.assinada){alert('Fotografe a nota assinada pelo cliente no campo "Recebido e Conferido por".');return;}
   var kmEl=document.getElementById('finKmCh');
   // v65: quem recebeu, cliente conferiu, km de chegada coerente
   var _rn=String(_recebNome||'').trim();
@@ -2326,7 +2343,7 @@ function extDe(e){
 function extParaStr(e){
   if(!e.ext)return '';
   var x=extDe(e);
-  var vazio=(x.seq===1&&!x.equipe.length&&!x.pendencia.itens.length&&!x.pendencia.aberta&&!x.pendencia.encerradoComRessalva&&!x.responsavel&&!x.respAdmin&&!x.origemId&&!x.proximaGerada&&!x.conf&&!x.receb&&!x.recl);
+  var vazio=(x.seq===1&&!x.equipe.length&&!x.pendencia.itens.length&&!x.pendencia.aberta&&!x.pendencia.encerradoComRessalva&&!x.responsavel&&!x.respAdmin&&!x.origemId&&!x.proximaGerada&&!x.conf&&!x.receb&&!x.recl&&!x.fotos);
   return vazio?'':JSON.stringify(x);
 }
 function strParaExt(s){
@@ -2930,6 +2947,219 @@ function rvGDias(itens,o){
 //   Km por entrega e custo por entrega — kmSaida/kmChegada e os abastecimentos.
 //   Retrabalho — viagem que existiu so porque algo deu errado antes.
 
+// ===================== v66: FOTOS DE PROVA E LEITURA DA NOTA =====================
+// A foto vai para o programa "Revestir - Fotos das entregas" (Drive da loja, pasta por mes).
+// A nota e lida pelo proprio Google e vira a lista de conferencia. Se a leitura falhar,
+// a conferencia volta a ser pelo papel — a operacao nunca trava por causa da leitura.
+var FOTOS_URL='https://script.google.com/macros/s/AKfycbx7dpAi7YnEOE8mngPPqJ9DlHLmBE0Z1FDgtXRZ_jyn20QQx7qR7DliZH6yduVTPcQc/exec';
+var FOTO_TIPO={nota:'nota_saida',carga:'carga',entrega:'entrega',assinada:'nota_assinada'};
+var FOTO_NOME={nota:'Nota da saída',carga:'Carga montada',entrega:'Produtos entregues',assinada:'Nota assinada'};
+var _fotos={}, _leit=null, _fotoFila=[], _fotoFilaAtiva=false;
+/* v66: le o texto que o Google tirou da foto da nota (Documento Auxiliar de Venda) */
+function _tituloNota(s){return String(s||'').toLowerCase().replace(/(^|\s)([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase();});}
+function lerNotaTexto(t){
+  var r={pedido:'',cliente:'',fone:'',endereco:'',bairro:'',cidade:'',itens:[]};
+  t=String(t||'').replace(/\r/g,'').replace(/\\([!=\-])/g,'$1');
+  if(!t)return r;
+  var m=/PEDIDO\s*:?\s*(V\s?\d{4,6})/i.exec(t);
+  if(m)r.pedido=m[1].replace(/\s+/g,'').toUpperCase();
+  m=/CLIENTE\.*\s*:\s*([^\n]+?)\s+-\s+\d+/i.exec(t);
+  if(m)r.cliente=m[1].trim();
+  m=/(?:^|[\s.])FONE\s*:\s*(\(?\d[\d() \-\/]{6,}\d)/m.exec(t);
+  if(m)r.fone=m[1].replace(/\s+/g,' ').trim();
+  var ie=t.search(/ENDERECO\.*\s*:/i);
+  if(ie>=0){
+    m=/ENDERECO\.*\s*:\s*([^\n:]+?)\s*(?=:|\n|$)/i.exec(t.slice(ie));
+    if(m)r.endereco=m[1].replace(/\s+(?:[A-Z]{1,3}\s+)?CNPJ.*$/i,'').trim();
+    var resto=t.slice(ie);
+    m=/(?:^|\n|\s):\s*([A-Z][A-Z .]+?)\s+-\s+([A-Z][A-Z .]+?)\s*(?:\n|$)/.exec(resto);
+    if(m){r.bairro=_tituloNota(m[1].trim());r.cidade=_tituloNota(m[2].trim());}
+    else{
+      m=/\n:\s*([A-Z][A-Z .]+?)\s*\n+([A-Z][A-Z .]+?)\s*\n/.exec(resto);
+      if(m){r.bairro=_tituloNota(m[1].trim());r.cidade=_tituloNota(m[2].trim());}
+    }
+  }
+  /* itens: so a parte entre o cabecalho QUANT. e o fim da lista */
+  var iq=t.search(/QUANT\./i), reg=t;
+  if(iq>=0){
+    reg=t.slice(iq);
+    var f=reg.search(/OBSERVACAO|VALOR TOTAL|DESCONTO VALOR|N[AÃ]O ENTREGAMOS/i);
+    if(f>0)reg=reg.slice(0,f);
+  }
+  var paras=reg.split(/\n\s*\n|\n(?=\s*X?\d{1,4}\.\d{3}\s)/);
+  var re=/(?:^|\s)X?(\d{1,4})\.(\d{3})\s+([A-Z][^\n]*?)(?=\s+X?\d{1,4}\.\d{3}(?:\s|$)|\s+(?:M2|PC|UN|CX|KG|ML|MT|LATERAL\.?|B\d{1,2}\.?)(?:\s|$)|\s*$)/g;
+  paras.forEach(function(p){
+    p=p.replace(/\n/g,' ');
+    var x;re.lastIndex=0;
+    while((x=re.exec(p))!==null){
+      var d=x[3].replace(/\s+/g,' ').trim();
+      if(!/[A-Z]{3}/.test(d))continue;
+      if(/^(VALOR|DESCONTO|DESCRICAO|TOTAL)/i.test(d))continue;
+      r.itens.push({qtd:String(Number(x[1]))+','+x[2],desc:d});
+    }
+  });
+  /* codigos (quando o Google separa a coluna) */
+  m=/CODIGO\s+((?:\d{3,6}\s+)+)/i.exec(t);
+  if(m){var cods=m[1].trim().split(/\s+/);if(cods.length===r.itens.length)r.itens.forEach(function(it,i){it.cod=cods[i];});}
+  return r;
+}
+
+function chamarFotos(payload,onOk,onErr){
+  fetch(FOTOS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'})
+  .then(function(r){return r.text();})
+  .then(function(t){var j;try{j=JSON.parse(t);}catch(e){onErr(t);return;}onOk(j);})
+  .catch(function(e){onErr(e);});
+}
+/* foto do celular vem com 3 a 5 MB: reduz para 1600px (~200 KB) antes de subir */
+function _reduzirFoto(file,cb){
+  var fr=new FileReader();
+  fr.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var M=1600,w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,k=Math.min(1,M/Math.max(w,h));
+      var c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var u='';try{u=c.toDataURL('image/jpeg',0.8);}catch(err){u='';}
+      cb(u||null);
+    };
+    img.onerror=function(){cb(null);};
+    img.src=fr.result;
+  };
+  fr.onerror=function(){cb(null);};
+  fr.readAsDataURL(file);
+}
+function _btnFotoCam(tipo,rot){
+  var f=_fotos[tipo];
+  return '<label class="fin-btn '+(f?'sel-ok':'')+'" id="btFoto_'+tipo+'" style="cursor:pointer">'+
+    '<input type="file" accept="image/*" capture="environment" id="inFoto_'+tipo+'" style="display:none" onchange="fotoEscolhida(\''+tipo+'\',this)">'+
+    '<span class="ico">'+(f?'✅':'📷')+'</span><span class="lbl">'+esc(rot)+'</span>'+
+    '<span id="fotoSt_'+tipo+'" style="display:block;font-size:11px;color:var(--muted);margin-top:3px">'+_fotoStTxt(tipo)+'</span></label>';
+}
+function _fotoStTxt(tipo){
+  var f=_fotos[tipo];if(!f)return 'toque para fotografar';
+  return ({preparando:'preparando…',enviando:'enviando…',ok:'foto guardada ✔',fila:'sem sinal: envia sozinha depois',erro:(f.msg||'não deu certo — tente de novo')})[f.st]||'';
+}
+function _fotoRender(tipo){
+  var b=document.getElementById('btFoto_'+tipo);
+  if(b){b.className='fin-btn '+(_fotos[tipo]?'sel-ok':'');var i=b.querySelector('.ico');if(i)i.textContent=_fotos[tipo]?'✅':'📷';}
+  var st=document.getElementById('fotoSt_'+tipo);if(st)st.textContent=_fotoStTxt(tipo);
+}
+function fotoEscolhida(tipo,input){
+  var file=input&&input.files&&input.files[0];
+  if(!file)return;
+  var eid=execId, e=entById(eid);
+  _fotos[tipo]={st:'preparando'};_fotoRender(tipo);
+  if(tipo==='nota'){_leit={lendo:true};_leitRender();}
+  _reduzirFoto(file,function(url){
+    try{input.value='';}catch(err){}
+    if(!url){_fotos[tipo]=null;_fotoRender(tipo);if(tipo==='nota'){_leit={erro:true};_leitRender();}alert('Não consegui abrir essa foto. Tente de novo.');return;}
+    _fotos[tipo]={st:'enviando'};_fotoRender(tipo);
+    if(tipo==='entrega')_fotoSel=true;
+    if(tipo==='carga')_confFoto=true;
+    _fotoEnviar({entregaId:String(eid),os:(e&&e.os)||'',tipo:tipo,b64:url.split(',')[1],tent:0});
+  });
+}
+function _fotoEnviar(it){
+  chamarFotos({action:'foto',token:_token,entregaId:it.entregaId,os:it.os,tipo:FOTO_TIPO[it.tipo]||it.tipo,b64:it.b64,ler:(it.tipo==='nota')},
+    function(res){
+      if(res&&res.ok){
+        _fotoGravar(it.entregaId,it.tipo,res.fileId);
+        var aqui=(String(execId)===String(it.entregaId));
+        if(aqui&&_fotos[it.tipo]){_fotos[it.tipo].st='ok';_fotos[it.tipo].fileId=res.fileId;_fotoRender(it.tipo);}
+        if(it.tipo==='nota'&&aqui){
+          var L=lerNotaTexto(res.texto||'');
+          _leit={lida:!!(L.pedido||L.itens.length),pedido:L.pedido,cliente:L.cliente,fone:L.fone,endereco:L.endereco,bairro:L.bairro,cidade:L.cidade,
+                 itens:L.itens.map(function(x){return {qtd:x.qtd,desc:x.desc,cod:x.cod||'',ok:false};})};
+          _leitAplicar();_leitRender();
+        }
+      } else _fotoFalhou(it,(res&&res.erro)||'');
+    },
+    function(){_fotoFalhou(it,'');});
+}
+function _fotoFalhou(it,msg){
+  it.tent=(it.tent||0)+1;
+  if(_fotoFila.indexOf(it)<0)_fotoFila.push(it);
+  if(String(execId)===String(it.entregaId)){
+    if(_fotos[it.tipo]){_fotos[it.tipo].st=/sess/i.test(msg)?'erro':'fila';if(/sess/i.test(msg))_fotos[it.tipo].msg=msg;_fotoRender(it.tipo);}
+    if(it.tipo==='nota'&&_leit&&_leit.lendo){_leit={erro:true};_leitRender();}
+  }
+}
+function _fotoFilaTentar(){
+  if(_fotoFilaAtiva||!_fotoFila.length||!_token)return;
+  _fotoFilaAtiva=true;
+  var it=_fotoFila.shift();
+  chamarFotos({action:'foto',token:_token,entregaId:it.entregaId,os:it.os,tipo:FOTO_TIPO[it.tipo]||it.tipo,b64:it.b64,ler:false},
+    function(res){_fotoFilaAtiva=false;if(res&&res.ok){_fotoGravar(it.entregaId,it.tipo,res.fileId);if(String(execId)===String(it.entregaId)&&_fotos[it.tipo]){_fotos[it.tipo].st='ok';_fotoRender(it.tipo);}}else{it.tent++;if(it.tent<20)_fotoFila.push(it);}},
+    function(){_fotoFilaAtiva=false;it.tent++;if(it.tent<20)_fotoFila.push(it);});
+}
+setInterval(function(){try{_fotoFilaTentar();}catch(err){}},30000);
+function _fotoGravar(entregaId,tipo,fileId){
+  var e=entById(entregaId);if(!e||!fileId)return;
+  var x=extDe(e);x.fotos=x.fotos||{};x.fotos[tipo]=fileId;
+  if(_token)save();
+}
+/* o que a nota trouxe preenche o que estiver vazio na entrega (nunca sobrescreve) */
+function _leitAplicar(){
+  var e=entById(execId);if(!e||!_leit||!_leit.lida)return;
+  if(!e.endereco&&_leit.endereco)e.endereco=_tituloNota(_leit.endereco);
+  if(!e.bairro&&_leit.bairro)e.bairro=_leit.bairro;
+  if(!e.cidade&&_leit.cidade)e.cidade=_leit.cidade;
+  if(!e.telefone&&_leit.fone)e.telefone=_leit.fone;
+  if(!e.os&&_leit.pedido)e.os=_leit.pedido;
+}
+function _leitHtml(){
+  var e=entById(execId);
+  if(!_leit)return '<div style="font-size:12px;color:var(--muted)">Fotografe a nota: o app lê os produtos e monta a lista para conferir.</div>';
+  if(_leit.lendo)return '<div class="alert alert-info" style="margin:0;font-size:13px">🔎 Lendo a nota…</div>';
+  var h='';
+  if(!_leit.lida||!_leit.itens||!_leit.itens.length){
+    h+='<div class="alert alert-orange" style="margin:0 0 8px;font-size:12px">Não deu para ler os produtos pela foto'+(_leit.erro?' (sem sinal ou falha na leitura)':'')+'. Confira pelo papel e marque abaixo.</div>'+
+       '<div class="fin-grid">'+_btnTog('btConfItens',_confItens,'📋','Conferido item a item com a nota','togConfItens()')+'</div>';
+    return h;
+  }
+  var trocada=(_leit.pedido&&e&&e.os&&osBaseEnt(_leit.pedido)!==osBaseEnt(e.os));
+  h+=trocada?('<div class="alert alert-red" style="margin:0 0 8px;font-size:13px">⚠️ Esta nota é do pedido <b>'+esc(_leit.pedido)+'</b>, mas a entrega é da O.S. <b>'+esc(e.os)+'</b>. Fotografe a nota certa.</div>'):
+    (_leit.pedido?('<div style="font-size:12px;color:var(--success);font-weight:600;margin-bottom:6px">✔ Nota do pedido '+esc(_leit.pedido)+'</div>'):'');
+  h+='<div style="font-size:12px;color:var(--mid);margin-bottom:6px">Confira cada produto na carga e toque para marcar:</div>';
+  h+=_leit.itens.map(function(it,i){
+    return '<button type="button" class="fin-btn fin-full '+(it.ok?'sel-ok':'')+'" onclick="togItemNota('+i+')" style="flex-direction:row;justify-content:flex-start;gap:10px;margin-bottom:6px;text-align:left">'+
+      '<span class="ico">'+(it.ok?'✅':'⬜')+'</span><span style="font-size:13px;font-weight:600">'+esc(it.qtd)+' — '+esc(it.desc)+'</span></button>';
+  }).join('');
+  return h;
+}
+function _leitRender(){var b=document.getElementById('leitBox');if(b)b.innerHTML=_leitHtml();}
+function togItemNota(i){if(!_leit||!_leit.itens||!_leit.itens[i])return;_leit.itens[i].ok=!_leit.itens[i].ok;_leitRender();}
+function _secFotosEntrega(){
+  var ret=!!_resSelec.Retirada;
+  return '<div class="fin-section" style="background:#F0FAF8;border:1px solid var(--teal);border-radius:12px;padding:12px">'+
+    '<div class="fin-label">📷 Fotos de prova <span style="color:var(--danger)">*</span></div>'+
+    '<div class="fin-grid">'+_btnFotoCam('entrega','Produtos entregues')+(ret?'':_btnFotoCam('assinada','Nota assinada pelo cliente'))+'</div>'+
+    (ret?'':'<div style="font-size:11px;color:var(--muted);margin-top:4px">Peça a assinatura no carimbo "Recebido e Conferido por" e fotografe. É a prova de que o cliente conferiu.</div>')+
+    '</div>';
+}
+/* ADM: fotos no detalhe da entrega (so abre quando pede, para nao pesar) */
+function _secFotosModal(e){
+  var x=extDe(e), f=x.fotos||{}, ks=Object.keys(f).filter(function(k){return !!f[k];});
+  var L=x.conf&&x.conf.leitura;
+  if(!ks.length&&!L)return '';
+  var h='<div class="pv-sec"><div class="pv-sec-title">📷 Fotos de prova</div>';
+  if(L&&L.itens&&L.itens.length)h+='<div style="font-size:12px;color:var(--mid);margin-bottom:6px">Nota lida'+(L.pedido?(' — pedido '+esc(L.pedido)):'')+(x.conf.porFoto?' · conferida item a item no app':'')+':<br>'+L.itens.map(function(i){return esc(i.qtd)+' — '+esc(i.desc);}).join('<br>')+'</div>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap">'+ks.map(function(k){
+    return '<button class="btn btn-ghost btn-sm" onclick="fotoVer(\''+esc(f[k])+'\',\'fv_'+esc(f[k])+'\')">'+esc(FOTO_NOME[k]||k)+'</button>';
+  }).join('')+'</div>'+ks.map(function(k){return '<div id="fv_'+esc(f[k])+'" style="margin-top:6px"></div>';}).join('');
+  return h+'</div>';
+}
+function fotoVer(fileId,elId){
+  var el=document.getElementById(elId);if(!el)return;
+  el.innerHTML='<div style="font-size:12px;color:var(--muted)">Abrindo a foto…</div>';
+  chamarFotos({action:'ver',token:_token,fileId:fileId},
+    function(res){
+      if(!res||!res.ok){el.innerHTML='<div style="font-size:12px;color:var(--danger)">'+esc((res&&res.erro)||'Não consegui abrir a foto.')+'</div>';return;}
+      el.innerHTML='<img src="data:'+(res.mime||'image/jpeg')+';base64,'+res.b64+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">';
+    },
+    function(){el.innerHTML='<div style="font-size:12px;color:var(--danger)">Sem conexão para abrir a foto.</div>';});
+}
+
 // ===================== v65: CONTROLE DE CARGA E RETRABALHO =====================
 // O erro de carga so aparecia se a propria equipe contasse. Agora:
 //  1) a carga so sai conferida por OUTRA pessoa, com foto no grupo e km anotado;
@@ -2965,10 +3195,14 @@ function _secConferencia(){
     '<div class="fin-label">✅ Conferência da carga <span style="color:var(--danger)">*</span></div>'+
     '<div style="font-size:12px;color:var(--mid);margin-bottom:8px">Outra pessoa da loja confere os produtos com a nota antes de o caminhão sair. Quem entrega não confere a própria carga.</div>'+
     campo+sep+
-    '<div class="fin-grid" style="margin-top:10px">'+
-      _btnTog('btConfItens',_confItens,'📋','Conferido item a item com a nota','togConfItens()')+
-      _btnTog('btConfFoto',_confFoto,'📷','Foto da carga no grupo','togConfFoto()')+
-    '</div></div>';
+    (FOTOS_URL?
+      ('<div class="fin-grid" style="margin-top:10px">'+_btnFotoCam('nota','Foto da nota (via sem preço)')+_btnFotoCam('carga','Foto da carga montada')+'</div>'+
+       '<div id="leitBox" style="margin-top:10px">'+_leitHtml()+'</div>'):
+      ('<div class="fin-grid" style="margin-top:10px">'+
+        _btnTog('btConfItens',_confItens,'📋','Conferido item a item com a nota','togConfItens()')+
+        _btnTog('btConfFoto',_confFoto,'📷','Foto da carga no grupo','togConfFoto()')+
+      '</div>'))+
+    '</div>';
 }
 function _secRecebimento(){
   var ret=!!_resSelec.Retirada;
@@ -3644,6 +3878,6 @@ function renderAVistaMoto(){
 
 
 </script>
-<div class="rv-selo">ENTREGA v65</div>
+<div class="rv-selo">ENTREGA v66</div>
 </body>
 </html>
