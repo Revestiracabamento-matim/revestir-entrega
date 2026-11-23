@@ -515,6 +515,15 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <div style="font-size:11px;color:var(--muted);margin-top:6px">O motorista marca quem está no caminhão ao sair para cada entrega. Só quem foi na viagem entra no bônus dela.</div>
     </div>
     <div class="card">
+      <div class="card-hd"><span class="card-title">Quem confere a carga (conferentes)</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <input type="text" id="confNome" placeholder="Nome de quem pode conferir a carga" style="flex:1;min-width:160px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+        <button class="btn btn-teal btn-sm" onclick="addConferente()">+ Adicionar</button>
+      </div>
+      <div id="confLista"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Antes de sair, o motorista escolhe quem conferiu a carga nesta lista. Quem vai entregar nunca pode conferir a própria carga. Não precisa de login.</div>
+    </div>
+    <div class="card">
       <div class="card-hd"><span class="card-title">Gestores que também dirigem</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <input type="text" id="gestNome" placeholder="Nome exato do gestor" style="flex:1;min-width:160px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
@@ -806,7 +815,7 @@ function _mesPadrao(){
   return MONTHS.indexOf(m)>=0?m:MONTHS[MONTHS.length-1];
 }
 var me = null, curMonth = _mesPadrao();
-var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],gestoresDir:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,minPartic:50}};
+var S = {entregas:[],motoristas:[],abastecimentos:[],ajudantes:[],gestoresDir:[],conferentes:[],bonusConfig:{porEntrega:5,custoKm:1.2,perfBonus:50,perfTaxaMin:97,meta:40,metaBonus:100,minPartic:50}};
 var execId = null, execResultado = '';
 var _editVeicId = null;
 var sigCtx = null, sigDraw = false, sigX = 0, sigY = 0;
@@ -1392,6 +1401,8 @@ function openModalEnt(id){
       (!e.ocorrencia.resolvida?'<button class="btn btn-teal btn-sm" style="margin-top:10px" onclick="resolverOc(\''+e.id+'\')">✅ Marcar como resolvida</button>':'')+
       '</div>';
   }
+  h+=_secConfRecebModal(e);
+  if(me&&me.role==='admin'&&e.finalizada)h+=_secReclamacao(e);
   h+='<div class="sep"></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
     '<select id="editSt" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:white">'+
@@ -1615,6 +1626,8 @@ function renderBonus(){
   document.getElementById('bonusMeta').value=bc.meta;
   document.getElementById('bonusMetaVal').value=bc.metaBonus;
   document.getElementById('bonusMinPart').value=(bc.minPartic===undefined?50:bc.minPartic);
+  var _cl=document.getElementById('confLista');
+  if(_cl)_cl.innerHTML=(S.conferentes||[]).length?(S.conferentes||[]).map(function(a,i){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(a)+' <a href="#" onclick="delConferente('+i+');return false;" style="color:inherit;margin-left:4px">✕</a></span>';}).join(''):'<span style="font-size:12px;color:var(--danger)">Nenhum conferente cadastrado — o motorista vai ter de digitar o nome de quem conferiu.</span>';
   var _gl=document.getElementById('gestLista');
   if(_gl)_gl.innerHTML=(S.gestoresDir||[]).length?(S.gestoresDir||[]).map(function(g){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(g)+' <a href="#" onclick="delGestorDir(\''+esc(g).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum gestor na lista.</div>';
   document.getElementById('ajLista').innerHTML=(S.ajudantes||[]).length?(S.ajudantes||[]).map(function(a){return '<span class="badge b-blue" style="font-size:12px;margin:0 6px 6px 0;padding:6px 10px">'+esc(a)+' <a href="#" onclick="delAjudante(\''+esc(a).replace(/'/g,'')+'\');return false" style="color:var(--danger);text-decoration:none;margin-left:6px">✕</a></span>';}).join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado.</div>';
@@ -1865,6 +1878,8 @@ function openExec(id){
   var e=entById(id);
   if(!e)return;
   _fotoSel=!!(e.fotoEnviada);
+  // v65: a conferencia e da viagem — comeca zerada a cada saida
+  _confQuem='';_confSep='';_confItens=false;_confFoto=false;_kmSaidaTmp='';_recebNome='';_recConf=false;
   if(e.status==='agendado')preSelecionarEquipe(e);
   document.getElementById('finTitulo').textContent=esc(e.cliente);
   renderExecStep(e);
@@ -1911,9 +1926,11 @@ function renderExecStep(e){
       '<div class="fin-grid" id="eqGrid">'+listaEquipePossivel().map(function(n){return _btnEq(n);}).join('')+'</div>'+
       (listaEquipePossivel().length?'':'<div style="font-size:12px;color:var(--muted)">Nenhum ajudante cadastrado (admin → Bonificação → Ajudantes).</div>')+
       '</div>'+
+      _secConferencia()+
       '<div class="fin-section">'+
-      '<div class="fin-label">🔢 KM do veículo agora (opcional)</div>'+
-      '<input type="number" id="kmSaidaIn" placeholder="ex: 45200" inputmode="numeric" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;font-family:inherit">'+
+      '<div class="fin-label">🔢 KM do veículo agora <span style="color:var(--danger)">*</span></div>'+
+      '<input type="number" id="kmSaidaIn" placeholder="ex: 45200" inputmode="numeric" value="'+esc(_kmSaidaTmp)+'" oninput="_kmSaidaTmp=this.value" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;font-family:inherit">'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px">Obrigatório: é o km do painel do caminhão. Sem ele o app não consegue somar a rodagem.</div>'+
       '</div>'+
       '<button class="btn btn-teal btn-block" style="font-size:16px;padding:16px" onclick="iniciarEnt()">🚚 Saindo para entrega</button>';
   } else if(e.status==='em_rota'){
@@ -1989,9 +2006,10 @@ function renderFinalizacao(e){
     '<div style="font-size:12px;color:var(--muted)">Obrigatório — sem marcar, a entrega não finaliza</div></div>'+
     '</div>'+
     '</div>'+
+    _secRecebimento()+
     // KM
     '<div class="fin-section">'+
-    '<div class="fin-label">🔢 KM de chegada (opcional)</div>'+
+    '<div class="fin-label">🔢 KM de chegada '+(_resSelec.Retirada?'(opcional)':'<span style="color:var(--danger)">*</span>')+'</div>'+
     '<input type="number" id="finKmCh" placeholder="ex: 45280" inputmode="numeric" value="'+kmCh+'" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;font-family:inherit">'+
     '</div>'+
     // ASSINATURA (só mostra se EXIGIR_ASSINATURA e não for Retirada)
@@ -2012,8 +2030,8 @@ function renderFinalizacao(e){
 function _secPendencia(e){
   var reent=ehReentrega(e);
   var parcial=!!_resSelec.Parcial;
-  var motivos=parcial?[['esqueceu','Esqueceu na loja'],['fabrica','Aguardando fábrica'],['quebrou','Quebrou'],['avariado','Avariado']]:[['quebrou','Quebrou'],['avariado','Avariado']];
-  var resps=['equipe','separacao','fornecedor','cliente'];
+  var motivos=parcial?[['errado','Produto errado / trocado'],['esqueceu','Esqueceu na loja'],['fabrica','Aguardando fábrica'],['quebrou','Quebrou'],['avariado','Avariado']]:[['errado','Produto errado / trocado'],['quebrou','Quebrou'],['avariado','Avariado']];
+  var resps=['equipe','separacao','conferencia','venda','fornecedor','cliente'];
   var rows=_pendItens.map(function(it,i){
     var checkbox=(reent&&parcial)?('<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;font-weight:600"><input type="checkbox" '+(it.entregue?'checked':'')+' onchange="_pendItens['+i+'].entregue=this.checked;renderFinalizacao(entById(execId))"> ✅ Entregue nesta viagem</label>'):'';
     return '<div style="background:white;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px'+(it.entregue?';opacity:.55':'')+'">'+
@@ -2113,8 +2131,17 @@ function iniciarEnt(){
   var e=entById(execId);
   if(!e)return;
   var kmEl=document.getElementById('kmSaidaIn');
+  // v65: ninguem sai sem a carga conferida por outra pessoa e sem o km
+  var _cq=String(_confQuem||'').trim();
+  if(!_cq){alert('Quem conferiu a carga? Escolha a pessoa da loja que conferiu os produtos com a nota.');return;}
+  if(me&&normStr(_cq)===normStr(me.name)){alert('A conferência tem que ser feita por OUTRA pessoa da loja, não por quem vai entregar.');return;}
+  if(!_confItens){alert('Marque "Conferido item a item com a nota". Sem conferência a carga não sai.');return;}
+  if(!_confFoto){alert('Mande a foto da carga conferida no grupo e marque "Foto da carga no grupo".');return;}
+  var _ks=kmEl&&kmEl.value?parseInt(kmEl.value,10):NaN;
+  if(!isFinite(_ks)||_ks<=0){alert('Informe o KM do veículo agora (o número do painel do caminhão).');return;}
+  extDe(e).conf={quem:_cq,sep:String(_confSep||'').trim(),itens:true,foto:true,em:Date.now()};
   e.status='em_rota';
-  e.kmSaida=kmEl&&kmEl.value?parseInt(kmEl.value):null;
+  e.kmSaida=_ks;
   e.horaSaida=Date.now();
   extDe(e).equipe=Object.keys(_eqSelec).filter(function(n){return _eqSelec[n];});
   _resSelec={Total:false,Parcial:false,Avaria:false,Retirada:false};
@@ -2160,7 +2187,18 @@ function confirmarEnt(){
   // v35: foto no grupo e regra da loja — sem ela a entrega nao fecha.
   if(!retirada&&!_fotoSel){alert('Mande a foto do produto entregue no grupo e marque o quadradinho "Foto enviada no grupo". Sem isso a entrega não pode ser finalizada.');return;}
   var kmEl=document.getElementById('finKmCh');
-  e.kmChegada=kmEl&&kmEl.value?parseInt(kmEl.value):e.kmChegada;
+  // v65: quem recebeu, cliente conferiu, km de chegada coerente
+  var _rn=String(_recebNome||'').trim();
+  if(!_rn){alert('Escreva o nome de quem recebeu os produtos.');return;}
+  if(!retirada&&!_recConf){alert('Peça para o cliente conferir os produtos com a nota AGORA e marque "Cliente conferiu na hora". Produto errado se resolve com o caminhão ainda lá.');return;}
+  var _kc=kmEl&&kmEl.value?parseInt(kmEl.value,10):NaN;
+  if(!retirada){
+    if(!isFinite(_kc)||_kc<=0){alert('Informe o KM de chegada (o número do painel do caminhão).');return;}
+    if(e.kmSaida&&_kc<e.kmSaida){alert('O KM de chegada ('+_kc+') está menor que o de saída ('+e.kmSaida+'). Confira o número.');return;}
+    if(e.kmSaida&&_kc-e.kmSaida>600){alert('Mais de 600 km nesta viagem? Confira o KM de chegada.');return;}
+  }
+  extDe(e).receb={nome:_rn,conferiu:!!_recConf,em:Date.now()};
+  e.kmChegada=isFinite(_kc)&&_kc>0?_kc:e.kmChegada;
   e.horaChegada=Date.now();
   var descEl=document.getElementById('finDesc');
   var natAuto=itensRestantes.map(function(i){return ITEM_NATUREZA[i.motivo]||'';}).filter(Boolean);
@@ -2254,9 +2292,9 @@ window.addEventListener('load',function(){
 // global (bônus + ajudantes) fica numa linha especial id CFG_ENTREGA.
 // ==================================================================
 var CFG_ID='CFG_ENTREGA';
-var RESP_LABELS={equipe:'Equipe de entrega',separacao:'Separação / loja',fornecedor:'Fornecedor',cliente:'Cliente'};
-var MOTIVO_LABELS={esqueceu:'Esqueceu na loja',fabrica:'Aguardando fábrica',quebrou:'Quebrou',avariado:'Avariado'};
-var ITEM_NATUREZA={esqueceu:'Falta',fabrica:'Falta',quebrou:'Quebra',avariado:'Avaria'};
+var RESP_LABELS={equipe:'Equipe de entrega',separacao:'Separação / loja',conferencia:'Conferência da carga',venda:'Venda / nota errada',fornecedor:'Fornecedor',cliente:'Cliente'};
+var MOTIVO_LABELS={esqueceu:'Esqueceu na loja',fabrica:'Aguardando fábrica',quebrou:'Quebrou',avariado:'Avariado',errado:'Produto errado / trocado'};
+var ITEM_NATUREZA={esqueceu:'Falta',fabrica:'Falta',quebrou:'Quebra',avariado:'Avaria',errado:'Errado'};
 function uniq(a){var o=[];a.forEach(function(v){if(o.indexOf(v)<0)o.push(v);});return o;}
 function respEfetivoItem(it){return it.respAdmin||it.responsavel||'';}
 function itensDaEntrega(e){return (extDe(e).pendencia.itens)||[];}
@@ -2288,7 +2326,7 @@ function extDe(e){
 function extParaStr(e){
   if(!e.ext)return '';
   var x=extDe(e);
-  var vazio=(x.seq===1&&!x.equipe.length&&!x.pendencia.itens.length&&!x.pendencia.aberta&&!x.pendencia.encerradoComRessalva&&!x.responsavel&&!x.respAdmin&&!x.origemId&&!x.proximaGerada);
+  var vazio=(x.seq===1&&!x.equipe.length&&!x.pendencia.itens.length&&!x.pendencia.aberta&&!x.pendencia.encerradoComRessalva&&!x.responsavel&&!x.respAdmin&&!x.origemId&&!x.proximaGerada&&!x.conf&&!x.receb&&!x.recl);
   return vazio?'':JSON.stringify(x);
 }
 function strParaExt(s){
@@ -2338,7 +2376,7 @@ function custoKmAtual(){return Number(S.bonusConfig.custoKm||0);}
 // ---------- configuração global (linha CFG_ENTREGA) ----------
 function mapConfigParaPorta(){
   return {mes:'config',id:CFG_ID,os:'',cliente:'CONFIGURAÇÃO DO APP (não apagar)',telefone:'',endereco:'',cidade:'',bairro:'',
-    produtos:JSON.stringify({bonus:S.bonusConfig,ajudantes:S.ajudantes||[],gestores:S.gestoresDir||[]}),finalizada:'sim',fotoEnviada:'',obs:'',dataAgendada:'',motorista:'',
+    produtos:JSON.stringify({bonus:S.bonusConfig,ajudantes:S.ajudantes||[],gestores:S.gestoresDir||[],conferentes:S.conferentes||[]}),finalizada:'sim',fotoEnviada:'',obs:'',dataAgendada:'',motorista:'',
     status:'config',dataEntrega:'',horaSaida:'',horaChegada:'',kmSaida:'',kmChegada:'',assinatura:'',ocorrenciaTipo:'',avariaProduto:'',avariaQtd:'',
     ocorrenciaDesc:'',reposicaoStatus:'',ocorrenciaResolvida:'',ocorrenciaResolvidoEm:'',criadoPor:'sistema'};
 }
@@ -2350,6 +2388,7 @@ function lerConfigNuvem(){
   if(c.bonus){var b=S.bonusConfig;Object.keys(c.bonus).forEach(function(k){b[k]=c.bonus[k];});}
   if(c.ajudantes)S.ajudantes=c.ajudantes;
   if(c.gestores)S.gestoresDir=c.gestores;
+  if(c.conferentes)S.conferentes=c.conferentes;
 }
 
 // ---------- pendência: gerar próxima viagem / encerrar ----------
@@ -2890,6 +2929,199 @@ function rvGDias(itens,o){
 //   Tempo de rota — hora de saida ate a chegada (ja gravadas como relogio).
 //   Km por entrega e custo por entrega — kmSaida/kmChegada e os abastecimentos.
 //   Retrabalho — viagem que existiu so porque algo deu errado antes.
+
+// ===================== v65: CONTROLE DE CARGA E RETRABALHO =====================
+// O erro de carga so aparecia se a propria equipe contasse. Agora:
+//  1) a carga so sai conferida por OUTRA pessoa, com foto no grupo e km anotado;
+//  2) o cliente confere na hora da entrega e o nome de quem recebeu fica gravado;
+//  3) reclamacao do cliente (registrada pelo ADM) vira ocorrencia + viagem de troca;
+//  4) km rodado fora de viagem registrada aparece sozinho (viagem escondida).
+var _confQuem='',_confSep='',_confItens=false,_confFoto=false,_kmSaidaTmp='',_recebNome='',_recConf=false;
+function listaConferentes(){
+  var eu=me?normStr(me.name):'';
+  return (S.conferentes||[]).filter(function(n){return normStr(n)!==eu;});
+}
+function _btnTog(id,on,ico,lbl,fn){
+  return '<button type="button" id="'+id+'" class="fin-btn '+(on?'sel-ok':'')+'" onclick="'+fn+'"><span class="ico">'+(on?'✅':ico)+'</span><span class="lbl">'+lbl+'</span></button>';
+}
+function _togVisual(id,on,ico){
+  var b=document.getElementById(id);if(!b)return;
+  b.className='fin-btn '+(on?'sel-ok':'');
+  var i=b.querySelector('.ico');if(i)i.textContent=on?'✅':ico;
+}
+function togConfItens(){_confItens=!_confItens;_togVisual('btConfItens',_confItens,'📋');}
+function togConfFoto(){_confFoto=!_confFoto;_togVisual('btConfFoto',_confFoto,'📷');}
+function togRecConf(){_recConf=!_recConf;_togVisual('btRecConf',_recConf,'🧾');}
+function _secConferencia(){
+  var L=listaConferentes();
+  var campo=L.length?
+    ('<select id="confQuem" onchange="_confQuem=this.value" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:white"><option value="">— quem conferiu a carga? —</option>'+
+      L.map(function(n){return '<option value="'+esc(n)+'"'+(normStr(n)===normStr(_confQuem)?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>'):
+    ('<input type="text" id="confQuem" value="'+esc(_confQuem)+'" oninput="_confQuem=this.value" placeholder="Nome de quem conferiu a carga" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit">');
+  var sep=L.length?
+    ('<select id="confSep" onchange="_confSep=this.value" style="width:100%;padding:11px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:white;margin-top:8px"><option value="">— quem separou (opcional) —</option>'+
+      (S.conferentes||[]).map(function(n){return '<option value="'+esc(n)+'"'+(normStr(n)===normStr(_confSep)?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>'):'';
+  return '<div class="fin-section" style="background:#F0FAF8;border:1px solid var(--teal);border-radius:12px;padding:12px">'+
+    '<div class="fin-label">✅ Conferência da carga <span style="color:var(--danger)">*</span></div>'+
+    '<div style="font-size:12px;color:var(--mid);margin-bottom:8px">Outra pessoa da loja confere os produtos com a nota antes de o caminhão sair. Quem entrega não confere a própria carga.</div>'+
+    campo+sep+
+    '<div class="fin-grid" style="margin-top:10px">'+
+      _btnTog('btConfItens',_confItens,'📋','Conferido item a item com a nota','togConfItens()')+
+      _btnTog('btConfFoto',_confFoto,'📷','Foto da carga no grupo','togConfFoto()')+
+    '</div></div>';
+}
+function _secRecebimento(){
+  var ret=!!_resSelec.Retirada;
+  return '<div class="fin-section" style="background:#F0FAF8;border:1px solid var(--teal);border-radius:12px;padding:12px">'+
+    '<div class="fin-label">🙋 Quem recebeu <span style="color:var(--danger)">*</span></div>'+
+    '<input type="text" id="recebNome" value="'+esc(_recebNome)+'" oninput="_recebNome=this.value" placeholder="Nome de quem recebeu" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit">'+
+    (ret?'':('<div class="fin-grid" style="margin-top:10px">'+_btnTog('btRecConf',_recConf,'🧾','Cliente conferiu os produtos com a nota, na hora','togRecConf()')+'</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px">Se o cliente achar produto errado agora, marque "Entrega parcial" e escolha "Produto errado / trocado": a troca já sai registrada.</div>'))+
+    '</div>';
+}
+function _secConfRecebModal(e){
+  var x=extDe(e),h='';
+  if(!x.conf&&!x.receb&&!x.recl)return '';
+  h='<div class="pv-sec"><div class="pv-sec-title">Conferência e recebimento</div>';
+  if(x.conf)h+='<div style="font-size:13px"><strong>Carga conferida por:</strong> '+esc(x.conf.quem||'—')+(x.conf.sep?' · separou: '+esc(x.conf.sep):'')+(x.conf.em?' <span style="color:var(--muted)">('+fmtDT(x.conf.em)+')</span>':'')+'</div>';
+  if(x.receb)h+='<div style="font-size:13px;margin-top:3px"><strong>Recebido por:</strong> '+esc(x.receb.nome||'—')+' · '+(x.receb.conferiu?'<span class="badge b-green">cliente conferiu na hora</span>':'<span class="badge b-gray">sem conferência do cliente</span>')+'</div>';
+  if(x.recl)h+='<div style="font-size:13px;margin-top:3px;color:var(--danger)"><strong>Cliente reclamou depois:</strong> '+esc(x.recl.desc||'')+' <span style="color:var(--muted)">('+esc(x.recl.por||'')+', '+(x.recl.em?fmtDT(x.recl.em):'')+')</span></div>';
+  return h+'</div>';
+}
+function _secReclamacao(e){
+  var sel='padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:white';
+  return '<div class="pv-sec" style="border-color:var(--danger)"><div class="pv-sec-title" style="color:var(--danger)">📞 Cliente reclamou depois da entrega</div>'+
+    '<div style="font-size:12px;color:var(--mid);margin-bottom:8px">Use quando o cliente avisar produto errado, faltando, quebrado ou avariado. Fica registrado como erro descoberto pelo cliente e, se precisar, a viagem de troca já é criada.</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<input type="text" id="rcItem" placeholder="Produto" style="flex:1;min-width:150px;'+sel+'">'+
+      '<input type="text" id="rcQtd" placeholder="Qtd" style="width:70px;'+sel+'">'+
+    '</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
+      '<select id="rcMotivo" style="flex:1;min-width:150px;'+sel+'"><option value="">O que houve?</option><option value="errado">Produto errado / trocado</option><option value="esqueceu">Faltou produto</option><option value="quebrou">Quebrado</option><option value="avariado">Avariado</option></select>'+
+      '<select id="rcOrigem" style="flex:1;min-width:150px;'+sel+'"><option value="">De onde veio o erro?</option>'+
+        Object.keys(RESP_LABELS).map(function(k){return '<option value="'+k+'">'+RESP_LABELS[k]+'</option>';}).join('')+'</select>'+
+    '</div>'+
+    '<textarea id="rcDesc" placeholder="O que o cliente disse" style="width:100%;margin-top:6px;height:56px;'+sel+';resize:none"></textarea>'+
+    '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="rcViagem" checked> Precisa de nova viagem (troca ou complemento)</label>'+
+    '<button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="registrarReclamacao(\''+e.id+'\')">Registrar reclamação</button></div>';
+}
+function registrarReclamacao(id){
+  var e=entById(id);if(!e)return;
+  if(!(me&&me.role==='admin')){alert('Só o administrador registra reclamação de cliente.');return;}
+  var g=function(i){var el=document.getElementById(i);return el?el.value:'';};
+  var item=String(g('rcItem')).trim(), qtd=String(g('rcQtd')).trim(), mot=g('rcMotivo'), org=g('rcOrigem'), desc=String(g('rcDesc')).trim();
+  var vEl=document.getElementById('rcViagem'), viagem=!!(vEl&&vEl.checked);
+  if(!item){alert('Escreva qual produto.');return;}
+  if(!mot){alert('Escolha o que houve.');return;}
+  if(!org){alert('Escolha de onde veio o erro.');return;}
+  var x=extDe(e);
+  x.pendencia.itens.push({item:item,qtd:qtd,motivo:mot,responsavel:org,respAdmin:org,entregue:false,recl:true,reclEm:Date.now(),reclPor:(me?me.name:'')});
+  x.recl={em:Date.now(),por:(me?me.name:''),desc:(desc||((qtd?qtd+' × ':'')+item+' — '+(MOTIVO_LABELS[mot]||mot))),n:((x.recl&&x.recl.n)||0)+1};
+  if(!e.ocorrencia)e.ocorrencia={resultado:'Total',naturezas:[],motivoFalta:'',desc:'',reposicaoStatus:'',resolvida:false,criadoEm:Date.now()};
+  var nat=ITEM_NATUREZA[mot];
+  if(nat&&(e.ocorrencia.naturezas||[]).indexOf(nat)<0)e.ocorrencia.naturezas=(e.ocorrencia.naturezas||[]).concat([nat]);
+  e.ocorrencia.desc=(e.ocorrencia.desc?e.ocorrencia.desc+' | ':'')+'Cliente reclamou: '+x.recl.desc;
+  e.ocorrencia.resolvida=false;
+  if(!e.ocorrencia.reposicaoStatus)e.ocorrencia.reposicaoStatus='A verificar estoque';
+  e.status='ocorrencia';
+  var msg='Reclamação registrada.';
+  if(viagem){
+    x.pendencia.aberta=true;
+    var prox=gerarProximaViagem(e);
+    if(prox){prox.obs='TROCA — cliente reclamou: '+(qtd?qtd+' × ':'')+item+' ('+(MOTIVO_LABELS[mot]||mot)+')';msg+=' A '+viagemLabel(prox)+' desta O.S. foi criada (a agendar).';}
+  }
+  save();renderAll();openModalEnt(id);
+  alert(msg);
+}
+function addConferente(){
+  var el=document.getElementById('confNome');var n=el?el.value.trim():'';
+  if(!n)return;
+  S.conferentes=S.conferentes||[];
+  if(S.conferentes.some(function(a){return normStr(a)===normStr(n);})){alert('Já cadastrado.');return;}
+  S.conferentes.push(n);el.value='';save();renderBonus();
+}
+function delConferente(i){
+  var n=(S.conferentes||[])[i];if(n===undefined)return;
+  if(!confirm('Remover '+n+' da lista de conferentes?'))return;
+  S.conferentes.splice(i,1);save();renderBonus();
+}
+/* --- indicadores de controle --- */
+function _ehErroCarga(it){return it&&(it.motivo==='errado'||it.motivo==='esqueceu');}
+function entConferencia(es){
+  var r={saidas:0,conferidas:0,porConf:{},erroCarga:0,descCliente:0,descEquipe:0,porMotivo:{},recebidas:0,clienteConferiu:0,
+         reentregas:0,osExtra:{},custoExtra:0,kmExtra:0,os:{}};
+  (es||[]).forEach(function(e){
+    if(!e||String(e.id)===CFG_ID)return;
+    var x=extDe(e);
+    if(e.os)r.os[osBaseEnt(e.os)]=1;
+    if(e.horaSaida){
+      r.saidas++;
+      if(x.conf&&x.conf.quem){r.conferidas++;var q=x.conf.quem;if(!r.porConf[q])r.porConf[q]={n:0,erros:0};r.porConf[q].n++;}
+    }
+    if(_entFin(e)&&!ehRetirada(e)){r.recebidas++;if(x.receb&&x.receb.conferiu)r.clienteConferiu++;}
+    var errou=false;
+    (x.pendencia.itens||[]).forEach(function(it){
+      var m=MOTIVO_LABELS[it.motivo]||'Sem motivo';
+      r.porMotivo[m]=(r.porMotivo[m]||0)+1;
+      if(it.recl)r.descCliente++;else r.descEquipe++;
+      if(_ehErroCarga(it)){r.erroCarga++;errou=true;}
+    });
+    if(errou&&x.conf&&x.conf.quem&&r.porConf[x.conf.quem])r.porConf[x.conf.quem].erros++;
+    if(ehReentrega(e)){r.reentregas++;if(e.os)r.osExtra[osBaseEnt(e.os)]=1;r.custoExtra+=Number(x.custoViagem)||0;r.kmExtra+=kmDist(e);}
+  });
+  r.nOS=Object.keys(r.os).length;r.nOSExtra=Object.keys(r.osExtra).length;
+  return r;
+}
+/* km rodado fora de viagem registrada: a saida de uma viagem tem de comecar onde a anterior terminou */
+function entKmSemRegistro(es,tol){
+  tol=(tol===undefined)?5:tol;
+  var v=(es||[]).filter(function(e){return e&&e.horaSaida&&Number(e.kmSaida)>0&&Number(e.kmChegada)>0;})
+    .slice().sort(function(a,b){return Number(a.horaSaida)-Number(b.horaSaida);});
+  var r={total:0,buracos:[],viagens:v.length};
+  for(var i=1;i<v.length;i++){
+    var g=Number(v[i].kmSaida)-Number(v[i-1].kmChegada);
+    if(g>tol){r.total+=g;r.buracos.push({km:g,de:v[i-1],para:v[i]});}
+  }
+  r.buracos.sort(function(a,b){return b.km-a.km;});
+  return r;
+}
+function _avConferencia(es){
+  var c=entConferencia(es), k=entKmSemRegistro(es);
+  if(!c.saidas&&!c.recebidas&&!c.reentregas&&!c.descCliente)
+    return '<div class="av-card"><div class="av-tit">Conferência da carga e retrabalho</div><div class="av-vazio">Nenhuma saída registrada neste mês.</div></div>';
+  var pctConf=c.saidas?Math.round(c.conferidas/c.saidas*100):null;
+  var pctCli=c.recebidas?Math.round(c.clienteConferiu/c.recebidas*100):null;
+  var f=[];
+  f.push(['Cargas conferidas',pctConf===null?'—':(pctConf+'%'),c.saidas?(c.conferidas+' de '+_pl(c.saidas,'saída','saídas')):'nenhuma saída']);
+  f.push(['Erros de carga',String(c.erroCarga),c.erroCarga?'produto errado ou faltando':'nenhum produto errado ou faltando']);
+  f.push(['Descobertos pelo cliente',String(c.descCliente),(c.descCliente+c.descEquipe)?(c.descEquipe+' registrados pela equipe na hora'):'nenhuma ocorrência com item']);
+  f.push(['O.S. com viagem extra',c.nOS?(c.nOSExtra+' de '+c.nOS):'—',c.reentregas?(_pl(c.reentregas,'viagem a mais','viagens a mais')+(c.kmExtra?(' · '+_dec(c.kmExtra)+' km'):'')+(c.custoExtra?(' · '+brl(c.custoExtra)):'')):'nenhum retrabalho']);
+  f.push(['Cliente conferiu na hora',pctCli===null?'—':(pctCli+'%'),c.recebidas?(c.clienteConferiu+' de '+_pl(c.recebidas,'entrega','entregas')):'nenhuma entrega finalizada']);
+  f.push(['Km fora de viagem',k.viagens>1?(_dec(k.total)+' km'):'—',k.viagens>1?(k.buracos.length?_pl(k.buracos.length,'buraco no hodômetro','buracos no hodômetro'):'tudo bate de uma viagem para a outra'):'precisa de 2 viagens com km']);
+  var h='<div class="av-card"><div class="av-tit">Conferência da carga e retrabalho</div>'+
+    '<div class="av-sub2">Erro de carga não depende mais de alguém contar: a carga sai conferida, o cliente confere na hora, a reclamação vira registro e o km mostra viagem que não foi lançada.</div>'+
+    '<div class="ent-fichas">'+f.map(function(x){return '<div class="ent-ficha"><div class="ent-ficha-l">'+_gEsc(x[0])+'</div><div class="ent-ficha-v">'+x[1]+'</div><div class="ent-ficha-s">'+_gEsc(x[2])+'</div></div>';}).join('')+'</div>';
+  var nomes=Object.keys(c.porConf);
+  if(nomes.length){
+    rvCorFixar(nomes);
+    h+='<div class="av-sub2" style="margin-top:14px"><b>Por conferente</b> — cargas conferidas e quantas tiveram produto errado ou faltando</div>'+
+      rvGBarraH(nomes.map(function(n){var p=c.porConf[n];return {nome:n,valor:p.n,sub:(p.erros?(_pl(p.erros,'carga com erro','cargas com erro')+' · acerto de '+Math.round((p.n-p.erros)/p.n*100)+'%'):'nenhuma carga com erro')};})
+        .sort(function(a,b){return b.valor-a.valor;}),{curto:true,unidade:'cargas',unidade1:'carga',vazio:'Sem dado.'});
+  }
+  var mot=Object.keys(c.porMotivo);
+  if(mot.length){
+    rvCorFixar(mot);
+    h+='<div class="av-sub2" style="margin-top:14px"><b>O que deu errado</b> — itens com problema no mês</div>'+
+      rvGBarraH(mot.map(function(m){return {nome:m,valor:c.porMotivo[m]};}).sort(function(a,b){return b.valor-a.valor;}),{curto:true,unidade:'itens',unidade1:'item',vazio:'Sem dado.'});
+  }
+  if(k.buracos.length){
+    h+='<div class="av-nota"><b>Atenção ao hodômetro:</b> '+k.buracos.slice(0,3).map(function(b){
+      return _dec(b.km)+' km entre '+_gEsc(b.de.cliente||'?')+' ('+diaBR(normDia(new Date(Number(b.de.horaChegada||b.de.horaSaida)).toISOString()))+') e '+_gEsc(b.para.cliente||'?');
+    }).join('; ')+'. O caminhão rodou sem viagem lançada no app.</div>';
+  }
+  return h+'</div>';
+}
+
 // ===== v61: O QUE EU TINHA DITO QUE NAO DAVA — E DA =====
 // Tres correcoes, todas erro meu de investigacao, nao limite do sistema:
 //  1. A venda CHEGA no app de entrega (_all.vendasEntrega, usada para preencher o
@@ -3174,6 +3406,9 @@ function renderAVistaEnt(){
         ((fin.length-semFoto)+' de '+fin.length+' finalizadas com foto'+(semFoto?('<br><span class="av-mudo">'+semFoto+' sem foto — a regra da loja não deixa fechar sem</span>'):'')))})+'</div>';
   h+='</div>';
 
+  /* 1a) v65: conferencia da carga e retrabalho */
+  h+=_avConferencia(es);
+
   /* 1b) o prazo que o cliente sente: da venda ate a entrega (v61) */
   var pc=entPrazoCliente(es), p1=entPrimeiraTentativa(es), cv=entCustoViagem(es);
   h+='<div class="av-card"><div class="av-tit">Da venda até a entrega</div>'+
@@ -3409,6 +3644,6 @@ function renderAVistaMoto(){
 
 
 </script>
-<div class="rv-selo">ENTREGA v64</div>
+<div class="rv-selo">ENTREGA v65</div>
 </body>
 </html>
