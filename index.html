@@ -32,6 +32,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--dark);min
 .header{background:white;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;gap:8px}
 .header-logo{height:32px;object-fit:contain}
 .tabs{background:white;border-bottom:2px solid var(--border);padding:0 12px;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:0}
+.tabs-wrap{position:relative}
+.tabs-fade{position:absolute;right:0;top:0;bottom:2px;width:30px;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:4px;background:linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,.95) 55%);
+  color:var(--teal);font-size:20px;font-weight:700;pointer-events:none;opacity:0;transition:opacity .15s}
+.tabs-fade.on{opacity:1}
 .tabs::-webkit-scrollbar{display:none}
 .tab-btn{padding:13px 14px;background:none;border:none;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-2px;font-family:inherit;transition:color .2s}
 .tab-btn.active{color:var(--teal);border-bottom-color:var(--teal)}
@@ -335,16 +340,19 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <button class="btn btn-sm btn-ghost" onclick="doLogout()">Sair</button>
     </div>
   </div>
-  <div class="tabs">
-    <button class="tab-btn active" onclick="goTab(this,'tAVista')">🎯 Gestão à vista</button>
-    <button class="tab-btn" onclick="goTab(this,'tDash')">📊 Dashboard</button>
-    <button class="tab-btn" onclick="goTab(this,'tEntregas')">📦 Entregas</button>
-    <button class="tab-btn" onclick="goTab(this,'tNovaEnt')">➕ Nova</button>
-    <button class="tab-btn" onclick="goTab(this,'tCombust')">⛽ Combustível</button>
-    <button class="tab-btn" id="btnTabBonus" onclick="goTab(this,'tBonus')">🏆 Bonificação</button>
-    <button class="tab-btn" onclick="goTab(this,'tOcorr')">⚠️ Ocorrências</button>
-    <button class="tab-btn" onclick="goTab(this,'tMotoristas')">🚚 Frota</button>
-    <button class="tab-btn" onclick="goTab(this,'tRelat')">📈 Relatórios</button>
+  <div class="tabs-wrap">
+    <div class="tabs" id="tabsAdmin">
+      <button class="tab-btn active" onclick="goTab(this,'tAVista')">🎯 Gestão à vista</button>
+      <button class="tab-btn" onclick="goTab(this,'tDash')">📊 Dashboard</button>
+      <button class="tab-btn" onclick="goTab(this,'tEntregas')">📦 Entregas</button>
+      <button class="tab-btn" onclick="goTab(this,'tNovaEnt')">➕ Nova</button>
+      <button class="tab-btn" onclick="goTab(this,'tCombust')">⛽ Combustível</button>
+      <button class="tab-btn" id="btnTabBonus" onclick="goTab(this,'tBonus')">🏆 Bonificação</button>
+      <button class="tab-btn" onclick="goTab(this,'tOcorr')">⚠️ Ocorrências</button>
+      <button class="tab-btn" onclick="goTab(this,'tMotoristas')">🚚 Frota</button>
+      <button class="tab-btn" onclick="goTab(this,'tRelat')">📈 Relatórios</button>
+    </div>
+    <div class="tabs-fade" id="tabsFadeAdmin">&rsaquo;</div>
   </div>
 
   <!-- DASHBOARD -->
@@ -682,14 +690,17 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
     <button class="btn btn-sm btn-ghost" id="btnModoGestao" style="display:none" onclick="modoGestao()">Modo gestão</button>
     <button class="btn btn-sm btn-ghost" onclick="doLogout()">Sair</button>
   </div>
-  <div class="tabs">
-    <button class="tab-btn active" onclick="goTab(this,'mtMinhas')">📦 Minhas Entregas</button>
-    <button class="tab-btn" onclick="goTab(this,'mtMeuMes')">📊 Meu Mês</button>
-    <button class="tab-btn" onclick="goTab(this,'mtAndamento')">🚚 Em Andamento</button>
-    <button class="tab-btn" onclick="goTab(this,'mtNova')">➕ Nova</button>
-    <button class="tab-btn" onclick="goTab(this,'mtHistorico')">✅ Histórico</button>
-    <button class="tab-btn" onclick="goTab(this,'mtBonus')">🏆 Bônus</button>
-    <button class="tab-btn" onclick="goTab(this,'mtComb')">⛽ Combustível</button>
+  <div class="tabs-wrap">
+    <div class="tabs" id="tabsMoto">
+      <button class="tab-btn active" onclick="goTab(this,'mtMinhas')">📦 Minhas Entregas</button>
+      <button class="tab-btn" onclick="goTab(this,'mtMeuMes')">📊 Meu Mês</button>
+      <button class="tab-btn" onclick="goTab(this,'mtAndamento')">🚚 Em Andamento</button>
+      <button class="tab-btn" onclick="goTab(this,'mtNova')">➕ Nova</button>
+      <button class="tab-btn" onclick="goTab(this,'mtHistorico')">✅ Histórico</button>
+      <button class="tab-btn" onclick="goTab(this,'mtBonus')">🏆 Bônus</button>
+      <button class="tab-btn" onclick="goTab(this,'mtComb')">⛽ Combustível</button>
+    </div>
+    <div class="tabs-fade" id="tabsFadeMoto">&rsaquo;</div>
   </div>
   <div id="mtMinhas" class="tab-pane active"><div id="mEntLista"></div></div>
   <div id="mtMeuMes" class="tab-pane"><div id="motoAVista"></div></div>
@@ -1018,6 +1029,7 @@ function iniciarSessao(){
       populateSelects();
       renderMotoApp();
     }
+    setTimeout(atualizarTodasFadeTabs,50);
     if(!window._refE){window._refE=setInterval(function(){
       if(_filaRetry.length){try{reprocessarFalhas(true);}catch(e){}}
       baixarTudo(function(){
@@ -2399,12 +2411,32 @@ function goTab(btn,id){
 }
 
 // ========== INIT ==========
+// v69: indicador visual de "tem mais abas pra rolar" (barra de abas e scroll horizontal, sem isso ficava escondido)
+var TABS_FADE_PARES=[['tabsAdmin','tabsFadeAdmin'],['tabsMoto','tabsFadeMoto']];
+function atualizarFadeTabs(idTabs,idFade){
+  var el=document.getElementById(idTabs),fd=document.getElementById(idFade);
+  if(!el||!fd)return;
+  var sobra=el.scrollWidth-el.clientWidth-el.scrollLeft;
+  if(sobra>4)fd.classList.add('on');else fd.classList.remove('on');
+}
+function atualizarTodasFadeTabs(){
+  TABS_FADE_PARES.forEach(function(p){atualizarFadeTabs(p[0],p[1]);});
+}
+function initFadeTabs(){
+  TABS_FADE_PARES.forEach(function(p){
+    var el=document.getElementById(p[0]);
+    if(!el)return;
+    el.addEventListener('scroll',function(){atualizarFadeTabs(p[0],p[1]);});
+  });
+  window.addEventListener('resize',atualizarTodasFadeTabs);
+}
 window.addEventListener('load',function(){
   loadData();
   var imgs=document.querySelectorAll('img[id$="Logo"]');
   for(var i=0;i<imgs.length;i++)imgs[i].src=LOGO;
   var lp=document.getElementById('lPass');
   if(lp)lp.addEventListener('keydown',function(ev){if(ev.key==='Enter')doLogin();});
+  initFadeTabs();
   if(restaurarSessaoLocal()){
     mostrarConfirmSessao();
   }
@@ -2666,12 +2698,14 @@ function modoMotorista(){
   document.getElementById('appMoto').classList.remove('hidden');
   renderMotoApp();
   window.scrollTo(0,0);
+  setTimeout(atualizarTodasFadeTabs,50);
 }
 function modoGestao(){
   document.getElementById('appMoto').classList.add('hidden');
   document.getElementById('appAdmin').classList.remove('hidden');
   renderAll();
   window.scrollTo(0,0);
+  setTimeout(atualizarTodasFadeTabs,50);
 }
 function addGestorDir(){
   var el=document.getElementById('gestNome');var n=el?el.value.trim():'';
