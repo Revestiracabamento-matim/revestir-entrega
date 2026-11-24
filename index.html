@@ -24,6 +24,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--dark);min
 .login-esqueci{text-align:right;margin-top:6px}
 .login-esqueci a{font-size:12px;color:var(--teal);text-decoration:none;font-weight:600}
 .login-esqueci a:active{opacity:.7}
+.confirma-user{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:24px}
+.confirma-avatar{width:56px;height:56px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
+.confirma-nome{font-size:16px;font-weight:700;color:var(--dark);text-align:center}
 .btn-login{width:100%;padding:14px;background:var(--teal);color:white;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;transition:background .2s}
 .btn-login:active{background:var(--teal-d)}
 .header{background:white;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;gap:8px}
@@ -287,16 +290,32 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
     <div class="login-box">
       <img id="llLogo" class="login-logo" src="" alt="Revestir">
       <p class="login-sub">Sistema de Entregas</p>
-      <div class="field"><label>Usuário</label><input id="lUser" type="text" placeholder="seu usuário" autocomplete="off" autocapitalize="none"></div>
-      <div class="field">
-        <label>Senha</label>
-        <div class="pass-wrap">
-          <input id="lPass" type="password" placeholder="••••••••" autocomplete="off">
-          <button type="button" id="lPassToggle" class="pass-eye" onclick="toggleSenhaVisivel()" aria-label="Mostrar senha"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+
+      <!-- Confirmacao de sessao restaurada (aparece quando o aparelho ja tinha um login salvo) -->
+      <div id="loginConfirma" class="hidden">
+        <div class="confirma-user">
+          <div class="confirma-avatar" id="confirmaAvatar"></div>
+          <div class="confirma-nome" id="confirmaNome"></div>
         </div>
-        <div class="login-esqueci"><a href="#" onclick="esqueciSenha();return false;">Esqueci minha senha</a></div>
+        <button class="btn-login" onclick="continuarSessaoRestaurada()">Continuar</button>
+        <div class="login-esqueci" style="text-align:center;margin-top:12px">
+          <a href="#" onclick="trocarUsuario();return false;">Não é você? Trocar de usuário</a>
+        </div>
       </div>
-      <button class="btn-login" onclick="doLogin()">Entrar</button>
+
+      <!-- Campos normais de login -->
+      <div id="loginCampos">
+        <div class="field"><label>Usuário</label><input id="lUser" type="text" placeholder="seu usuário" autocomplete="off" autocapitalize="none"></div>
+        <div class="field">
+          <label>Senha</label>
+          <div class="pass-wrap">
+            <input id="lPass" type="password" placeholder="••••••••" autocomplete="off">
+            <button type="button" id="lPassToggle" class="pass-eye" onclick="toggleSenhaVisivel()" aria-label="Mostrar senha"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+          </div>
+          <div class="login-esqueci"><a href="#" onclick="esqueciSenha();return false;">Esqueci minha senha</a></div>
+        </div>
+        <button class="btn-login" onclick="doLogin()">Entrar</button>
+      </div>
       <div id="lErr" class="login-err"></div>
     </div>
   </div>
@@ -871,6 +890,33 @@ function restaurarSessaoLocal(){
     return true;
   }catch(e){return false;}
 }
+function iniciaisNome(nome){
+  var partes=(nome||'').trim().split(/\s+/);
+  if(!partes.length||!partes[0])return '?';
+  var ini=partes[0].charAt(0);
+  if(partes.length>1)ini+=partes[partes.length-1].charAt(0);
+  return ini.toUpperCase();
+}
+function mostrarConfirmSessao(){
+  var nome=(me&&(me.name||me.user))||'';
+  var nn=document.getElementById('confirmaNome');if(nn)nn.textContent=nome;
+  var av=document.getElementById('confirmaAvatar');if(av)av.textContent=iniciaisNome(nome);
+  var lc=document.getElementById('loginConfirma');if(lc)lc.classList.remove('hidden');
+  var lf=document.getElementById('loginCampos');if(lf)lf.classList.add('hidden');
+}
+function continuarSessaoRestaurada(){
+  var lc=document.getElementById('loginConfirma');if(lc)lc.classList.add('hidden');
+  var le=document.getElementById('lErr');if(le)le.textContent='Entrando...';
+  iniciarSessao();
+}
+function trocarUsuario(){
+  limparSessaoLocal();me=null;_token=null;
+  var lc=document.getElementById('loginConfirma');if(lc)lc.classList.add('hidden');
+  var lf=document.getElementById('loginCampos');if(lf)lf.classList.remove('hidden');
+  var le=document.getElementById('lErr');if(le)le.textContent='';
+  var lu=document.getElementById('lUser');if(lu){lu.value='';lu.focus();}
+  var lp=document.getElementById('lPass');if(lp)lp.value='';
+}
 function chamarPorta(payload,onOk,onErr){
   fetch(PORTA,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'})
   .then(function(r){return r.text();})
@@ -995,6 +1041,8 @@ function doLogout(){
   document.getElementById('appAdmin').classList.add('hidden');
   document.getElementById('appMoto').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
+  var lc=document.getElementById('loginConfirma');if(lc)lc.classList.add('hidden');
+  var lf=document.getElementById('loginCampos');if(lf)lf.classList.remove('hidden');
   document.getElementById('lUser').value='';
   document.getElementById('lPass').value='';
   document.getElementById('lErr').textContent='';
@@ -1085,6 +1133,8 @@ function baixarTudo(cb){
         var aindaNoLogin=tela&&!tela.classList.contains('hidden');
         if(aindaNoLogin){
           limparSessaoLocal();me=null;_token=null;
+          var lc=document.getElementById('loginConfirma');if(lc)lc.classList.add('hidden');
+          var lf=document.getElementById('loginCampos');if(lf)lf.classList.remove('hidden');
           var le=document.getElementById('lErr');if(le)le.textContent='Sua sessao expirou. Faca login novamente.';
         }
         if(cb)cb();return;
@@ -2356,8 +2406,7 @@ window.addEventListener('load',function(){
   var lp=document.getElementById('lPass');
   if(lp)lp.addEventListener('keydown',function(ev){if(ev.key==='Enter')doLogin();});
   if(restaurarSessaoLocal()){
-    var le=document.getElementById('lErr');if(le)le.textContent='Entrando...';
-    iniciarSessao();
+    mostrarConfirmSessao();
   }
 });
 
