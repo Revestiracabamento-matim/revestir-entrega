@@ -17,6 +17,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--dark);min
 .login-logo{display:block;height:52px;margin:0 auto 6px;object-fit:contain}
 .login-sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:28px;font-weight:500}
 .login-err{color:var(--danger);font-size:12px;text-align:center;margin-top:8px;min-height:16px}
+.pass-wrap{position:relative}
+.pass-wrap input{padding-right:42px}
+.pass-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:none;background:transparent;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.pass-eye:active{color:var(--teal)}
+.login-esqueci{text-align:right;margin-top:6px}
+.login-esqueci a{font-size:12px;color:var(--teal);text-decoration:none;font-weight:600}
+.login-esqueci a:active{opacity:.7}
 .btn-login{width:100%;padding:14px;background:var(--teal);color:white;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;transition:background .2s}
 .btn-login:active{background:var(--teal-d)}
 .header{background:white;border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;gap:8px}
@@ -281,7 +288,14 @@ table td{border-bottom:1px solid var(--rv-linha2);font-size:13px}
       <img id="llLogo" class="login-logo" src="" alt="Revestir">
       <p class="login-sub">Sistema de Entregas</p>
       <div class="field"><label>Usuário</label><input id="lUser" type="text" placeholder="seu usuário" autocomplete="off" autocapitalize="none"></div>
-      <div class="field"><label>Senha</label><input id="lPass" type="password" placeholder="••••••••" autocomplete="off"></div>
+      <div class="field">
+        <label>Senha</label>
+        <div class="pass-wrap">
+          <input id="lPass" type="password" placeholder="••••••••" autocomplete="off">
+          <button type="button" id="lPassToggle" class="pass-eye" onclick="toggleSenhaVisivel()" aria-label="Mostrar senha"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+        </div>
+        <div class="login-esqueci"><a href="#" onclick="esqueciSenha();return false;">Esqueci minha senha</a></div>
+      </div>
       <button class="btn-login" onclick="doLogin()">Entrar</button>
       <div id="lErr" class="login-err"></div>
     </div>
@@ -826,6 +840,37 @@ var PORTA='https://script.google.com/macros/s/AKfycbxWMEQvEppJTeKD44RK7U6g2ZMcSe
 var _token=null;
 var _all={entregas:[],abastecimento:[],vendasEntrega:[]};
 var _glob={cidades:[],motoristas:[],veiculos:[]};
+// v68: manter login ao atualizar a pagina + olhinho de senha
+var SESSAO_KEY='rvSessao';
+var ICON_OLHO='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+var ICON_OLHO_FECHADO='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M1 1l22 22"></path></svg>';
+function toggleSenhaVisivel(){
+  var inp=document.getElementById('lPass'),btn=document.getElementById('lPassToggle');
+  if(!inp||!btn)return;
+  var mostrar=inp.type==='password';
+  inp.type=mostrar?'text':'password';
+  btn.innerHTML=mostrar?ICON_OLHO_FECHADO:ICON_OLHO;
+  btn.setAttribute('aria-label',mostrar?'Ocultar senha':'Mostrar senha');
+}
+function esqueciSenha(){
+  alert('Para redefinir sua senha, peca para o administrador fazer isso em:\nDashboard de Vendas > Gestao de usuarios.\n\nVoce vai receber uma senha provisoria e vai criar uma nova senha no proximo acesso.');
+}
+function salvarSessaoLocal(){
+  try{if(_token&&me)localStorage.setItem(SESSAO_KEY,JSON.stringify({token:_token,me:me}));}catch(e){}
+}
+function limparSessaoLocal(){
+  try{localStorage.removeItem(SESSAO_KEY);}catch(e){}
+}
+function restaurarSessaoLocal(){
+  try{
+    var raw=localStorage.getItem(SESSAO_KEY);
+    if(!raw)return false;
+    var s=JSON.parse(raw);
+    if(!s||!s.token||!s.me)return false;
+    _token=s.token;me=s.me;
+    return true;
+  }catch(e){return false;}
+}
 function chamarPorta(payload,onOk,onErr){
   fetch(PORTA,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'})
   .then(function(r){return r.text();})
@@ -902,6 +947,7 @@ function salvarNovaSenha(){
     function(err){document.getElementById('lErr').textContent='Sem conexão. Tente de novo.';});
 }
 function iniciarSessao(){
+  salvarSessaoLocal();
   baixarTudo(function(){
     document.getElementById('loginScreen').classList.add('hidden');
     var ehAdmin=(me&&me.role==='admin');
@@ -944,7 +990,7 @@ function doLogout(){
   if(_filaAtiva||_fila.length){alert('Ainda estou salvando na nuvem. Espere o aviso vermelho sumir e toque em Sair de novo.');return;}
   if(_filaRetry.length&&!confirm('Ha '+_filaRetry.length+' lancamento(s) que NAO foram salvos na nuvem. Se sair agora, eles se perdem. Sair mesmo assim?'))return;
   _fila=[];_filaRetry=[];_filaAtiva=false;rvStatusFila();
-  me=null;_token=null;_pendingNova=false;
+  me=null;_token=null;_pendingNova=false;limparSessaoLocal();
   if(window._refE){clearInterval(window._refE);window._refE=null;}
   document.getElementById('appAdmin').classList.add('hidden');
   document.getElementById('appMoto').classList.add('hidden');
@@ -1033,7 +1079,16 @@ function baixarTudo(cb){
   if(!_token){if(cb)cb();return;}
   chamarPorta({action:'getAll',token:_token},
     function(res){
-      if(!res||!res.ok){console.error('[getAll]',res&&res.erro);if(cb)cb();return;}
+      if(!res||!res.ok){
+        console.error('[getAll]',res&&res.erro);
+        var tela=document.getElementById('loginScreen');
+        var aindaNoLogin=tela&&!tela.classList.contains('hidden');
+        if(aindaNoLogin){
+          limparSessaoLocal();me=null;_token=null;
+          var le=document.getElementById('lErr');if(le)le.textContent='Sua sessao expirou. Faca login novamente.';
+        }
+        if(cb)cb();return;
+      }
       var d=res.dados||{},g=res.global||{};
       _all.entregas=d.entregas||[];
       _all.abastecimento=d.abastecimento||[];
@@ -2300,6 +2355,10 @@ window.addEventListener('load',function(){
   for(var i=0;i<imgs.length;i++)imgs[i].src=LOGO;
   var lp=document.getElementById('lPass');
   if(lp)lp.addEventListener('keydown',function(ev){if(ev.key==='Enter')doLogin();});
+  if(restaurarSessaoLocal()){
+    var le=document.getElementById('lErr');if(le)le.textContent='Entrando...';
+    iniciarSessao();
+  }
 });
 
 // ==================================================================
